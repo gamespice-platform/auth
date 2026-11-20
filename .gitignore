@@ -23,3 +23,9 @@ dot_auth*.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Linked addons (separate repositories, symlinked in for local development).
+/addons/dot_cloud
+/addons/dot_moderation
+/addons/dot_sql
+/addons/dot_voice
