@@ -10,7 +10,7 @@ config_version=5
 
 [application]
 
-config/name="dot-auth"
+config/name="gs-auth"
 config/description="Device-code authentication against a web backbone, signed connect tickets, and server-side identity for multiplayer games."
 config/version="0.1.0"
 run/main_scene="res://examples/auth_demo.tscn"
@@ -18,7 +18,7 @@ config/features=PackedStringArray("4.7", "GL Compatibility")
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/dot_core/plugin.cfg", "res://addons/dot_auth/plugin.cfg")
+enabled=PackedStringArray("res://addons/gs_core/plugin.cfg", "res://addons/gs_auth/plugin.cfg")
 
 [importer_defaults]
 

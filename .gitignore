@@ -2,13 +2,13 @@
 .godot/
 /android/
 
-# dot-core is a separate repository. For local development, symlink it:
-#   ln -s ../../dot-core/addons/dot_core addons/dot_core
+# gs-core is a separate repository. For local development, symlink it:
+#   ln -s ../../gs-core/addons/gs_core addons/gs_core
 # Consumers copy both addons into their own project.
-/addons/dot_core
-# dot-server, for examples/session_reporter_selftest.tscn only (the addon never names it):
-#   ln -s ../../dot-server/addons/dot_server addons/dot_server
-/addons/dot_server
+/addons/gs_core
+# gs-server, for examples/session_reporter_selftest.tscn only (the addon never names it):
+#   ln -s ../../gs-server/addons/gs_server addons/gs_server
+/addons/gs_server
 
 # Exports
 build/
@@ -18,7 +18,7 @@ export_presets.cfg
 *.key
 *.pem
 keys/
-dot_auth*.json
+gs_auth*.json
 
 # OS
 .DS_Store

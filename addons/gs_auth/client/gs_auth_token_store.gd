@@ -172,7 +172,7 @@ func is_loaded() -> bool:
 
 ## Passphrase for the encrypted store: a random per-install salt beside it plus a device-stable string, so a copied pair is unreadable elsewhere.
 func _passphrase() -> String:
-	return GSHash.sha256_text("dot-auth/v1|%s|%s" % [_salt(), _device_seed()])
+	return GSHash.sha256_text("gs-auth/v1|%s|%s" % [_salt(), _device_seed()])
 
 
 func _salt_path() -> String:

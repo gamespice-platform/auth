@@ -37,7 +37,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	print("dot-auth session reporter self-test")
+	print("gs-auth session reporter self-test")
 
 	_fake = TCPServer.new()
 	if _fake.listen(FAKE_PORT, "127.0.0.1") != OK:
@@ -50,7 +50,7 @@ func _run() -> void:
 	var key := Crypto.new().generate_rsa(2048)
 	var issuer_config := GSAuthConfig.new()
 	issuer_config.issuer_private_key = key.save_to_string(false)
-	issuer_config.issuer_name = "dot-auth-test"
+	issuer_config.issuer_name = "gs-auth-test"
 	issuer_config.backbone_url = "http://127.0.0.1:1"
 	issuer_config.ticket_ttl_sec = 300
 	issuer_config.session_lease_sec = 300
@@ -293,7 +293,7 @@ func _test_control_without_the_reporter() -> void:
 
 func _server_config(port: int) -> GSServerConfig:
 	var config := GSServerConfig.new()
-	config.hostname = "dot-auth reporter selftest"
+	config.hostname = "gs-auth reporter selftest"
 	config.port = port
 	config.max_players = 4
 	config.a2s_enabled = false

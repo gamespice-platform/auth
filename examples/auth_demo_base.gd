@@ -51,8 +51,8 @@ func _line(text: String) -> void:
 func _test_local_profiles() -> void:
 	_section("[b]local profiles[/b]")
 
-	var path := "user://dot_auth_test_profiles.json"
-	var keeper_path := "user://dot_auth_test_profile_client.dat"
+	var path := "user://gs_auth_test_profiles.json"
+	var keeper_path := "user://gs_auth_test_profile_client.dat"
 	if not _profiles_store_checks(path):
 		return
 
@@ -166,10 +166,10 @@ func _profiles_persistence_checks(path: String, id: String, secret: String) -> v
 func _profiles_server_checks() -> Dictionary:
 	var config := GSAuthConfig.new()
 	config.strategy = GSAuthConfig.Strategy.LOCAL
-	config.local_accounts_path = "user://dot_auth_profile_strategy.json"
+	config.local_accounts_path = "user://gs_auth_profile_strategy.json"
 	config.allow_guests = false
 	config.allow_local_profiles = true
-	config.local_profiles_path = "user://dot_auth_test_profiles_server.json"
+	config.local_profiles_path = "user://gs_auth_test_profiles_server.json"
 
 	DirAccess.remove_absolute(config.local_profiles_path)
 

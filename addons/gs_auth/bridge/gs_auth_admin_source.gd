@@ -109,13 +109,13 @@ func lookup(identity: GSAuthIdentity) -> GSResult:
 	return GSResult.success({
 		"flags": out,
 		"immunity": immunity,
-		"source": "dot-auth (%s)" % ", ".join(reasons),
+		"source": "gs-auth (%s)" % ", ".join(reasons),
 	})
 
 
 ## Name GameSpice Server shows for this source in `admin_sources` output.
 func source_name() -> String:
-	return "dot-auth"
+	return "gs-auth"
 
 
 ## Accepts a single flag string or a list, so config files can write either.

@@ -4,7 +4,7 @@ Open-source authentication for Godot games and dedicated servers, wired to the w
 
 Read the family [CLAUDE.md](../../CLAUDE.md) and [docs/backbone.md](../../docs/backbone.md) first; this file is only what is specific to authentication. The reasoning is in [docs/](docs/README.md).
 
-**The distributable is `addons/dot_auth/`. It requires dot-core** (API level in `dot_auth_api.gd`), linked locally (`ln -s ../../dot-core/addons/dot_core addons/dot_core`, gitignored; [development setup](../../docs/development-setup.md)). dot-auth and dot-server never import each other. [strategies](docs/strategies.md#coupling-with-dot-server)
+**The distributable is `addons/gs_auth/`. It requires gs-core** (API level in `gs_auth_api.gd`), linked locally (`ln -s ../../gs-core/addons/gs_core addons/gs_core`, gitignored; [development setup](../../docs/development-setup.md)). gs-auth and gs-server never import each other. [strategies](docs/strategies.md#coupling-with-gs-server)
 
 ## Read before
 
@@ -21,18 +21,18 @@ Read the family [CLAUDE.md](../../CLAUDE.md) and [docs/backbone.md](../../docs/b
 
 | Path | What |
 | --- | --- |
-| `addons/dot_auth/dot_auth_config.gd` | strategies and endpoints; `validate()` enforces the invariants |
-| `addons/dot_auth/dot_auth_identity.gd` | who a player is; `uid` is namespaced `provider:id` |
-| `addons/dot_auth/util/` | `GSJwt` (compact JWS, algorithm pinned by the verifier), `GSPkce` |
-| `addons/dot_auth/client/` | `GSAuthClient` (device flow, rotating refresh, tickets, `post_app` / `get_app`), `GSAuthTokenStore` (read the caveat), `GSAuthWebHandoff` |
-| `addons/dot_auth/local/` | `GSLocalProfiles`, `GSLocalProfileProvider`, `GSLocalProfileClient` (the client's secrets, keyed by server) |
-| `addons/dot_auth/server/` | `GSAuthTicket` (read the class doc), `GSAuthIssuer` (minting and the session table), `GSAuthSessionReporter`, `GSAuthProvider`, `GSAuthServer` (registers as `dot_auth_server`) |
-| `addons/dot_auth/backbone/` | `GSBackboneClient`: server self-reporting; `post_integration` / `get_integration` are the seams other addons use |
-| `addons/dot_auth/bridge/` | `GSAuthAdminSource`: site groups to server permission flags, duck-typed for GameSpice Server |
-| `addons/dot_auth/dot_auth_api.gd` | the API level (`LEVEL`, `OLDEST`); the bump rule is on `GSAddonApi` |
+| `addons/gs_auth/gs_auth_config.gd` | strategies and endpoints; `validate()` enforces the invariants |
+| `addons/gs_auth/gs_auth_identity.gd` | who a player is; `uid` is namespaced `provider:id` |
+| `addons/gs_auth/util/` | `GSJwt` (compact JWS, algorithm pinned by the verifier), `GSPkce` |
+| `addons/gs_auth/client/` | `GSAuthClient` (device flow, rotating refresh, tickets, `post_app` / `get_app`), `GSAuthTokenStore` (read the caveat), `GSAuthWebHandoff` |
+| `addons/gs_auth/local/` | `GSLocalProfiles`, `GSLocalProfileProvider`, `GSLocalProfileClient` (the client's secrets, keyed by server) |
+| `addons/gs_auth/server/` | `GSAuthTicket` (read the class doc), `GSAuthIssuer` (minting and the session table), `GSAuthSessionReporter`, `GSAuthProvider`, `GSAuthServer` (registers as `gs_auth_server`) |
+| `addons/gs_auth/backbone/` | `GSBackboneClient`: server self-reporting; `post_integration` / `get_integration` are the seams other addons use |
+| `addons/gs_auth/bridge/` | `GSAuthAdminSource`: site groups to server permission flags, duck-typed for GameSpice Server |
+| `addons/gs_auth/gs_auth_api.gd` | the API level (`LEVEL`, `OLDEST`); the bump rule is on `GSAddonApi` |
 | `examples/auth_demo.tscn` | the suite, offline (binds `127.0.0.1:18787` for the issuer's listener; skips those checks with a line if the port is taken) |
-| `examples/cfg_selftest.tscn` | `auth.yml` from `cfg/addons/dot_auth/`, `cfg/server/addons/dot_auth/` over it, the flat `cfg/auth.yml` shim (WARN once, removed 2026-12-31); secrets stay file-only |
-| `examples/session_reporter_selftest.tscn` | a stopping `GSServer` frees its players' seats on its report; needs dot-server linked (`ln -s ../../dot-server/addons/dot_server addons/dot_server`, gitignored); binds `127.0.0.1:18795`-`18799` |
+| `examples/cfg_selftest.tscn` | `auth.yml` from `cfg/addons/gs_auth/`, `cfg/server/addons/gs_auth/` over it, the flat `cfg/auth.yml` shim (WARN once, removed 2026-12-31); secrets stay file-only |
+| `examples/session_reporter_selftest.tscn` | a stopping `GSServer` frees its players' seats on its report; needs gs-server linked (`ln -s ../../gs-server/addons/gs_server addons/gs_server`, gitignored); binds `127.0.0.1:18795`-`18799` |
 | `examples/issuer.tscn` | the issuer as a daemon; never exits, so no smoke test covers it |
 
 ## Running and testing
@@ -48,7 +48,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) and [docs/backbone.md](../../docs/b
 - A server never receives a player's backbone token on a public server: `TICKET` is for public servers, `INTROSPECT` for first-party only, and even then the client sends a single-use join token minted for the announced audience, never `valid_access_token()`. A client sends only the credential asked for. [strategies](docs/strategies.md#introspect-never-hands-a-server-the-access-token) [tickets](docs/tickets.md#the-central-design-problem-and-the-answer)
 - A ticket is audience-scoped, minutes long, single-use and RS256. `validate()` refuses `TICKET` without `server_id` and replay memory not longer than the ticket's life. A client asks for one by the address it dialled, never the announced id, with the server's challenge nonce; the host passes its own nonce to `authenticate`, never one from the credential; an adopting server verifies nothing until it holds an id and a key from its own backbone. [tickets](docs/tickets.md#the-backbones-own-issuer-by-dialled-address) [tickets](docs/tickets.md#the-central-design-problem-and-the-answer)
 - `single_session` lives on the issuer; rosters are absolute; an unconfirmed session is never ended by a roster; `session_lease_sec >= ticket_ttl_sec`; server keys are per server. [tickets](docs/tickets.md#one-seat-per-account)
-- `GSAuthServer` builds the `GSAuthSessionReporter` when `session_report_url` is set and follows the registry's `dot_server`; the roster is every signed-on session, not only those in play. [tickets](docs/tickets.md#who-builds-the-reporter-and-which-stops-it-reports)
+- `GSAuthServer` builds the `GSAuthSessionReporter` when `session_report_url` is set and follows the registry's `gs_server`; the roster is every signed-on session, not only those in play. [tickets](docs/tickets.md#who-builds-the-reporter-and-which-stops-it-reports)
 - The goodbye is synchronous (`report_offline_now()`, bounded): `shutdown()` and `quit()` report; SIGINT/SIGTERM/kill do not and fall to the lease. [tickets](docs/tickets.md#who-builds-the-reporter-and-which-stops-it-reports)
 - The issuer's listener goes behind a reverse proxy; requests are buffered across polls and bounded in total, not per read. [tickets](docs/tickets.md#running-the-issuer)
 

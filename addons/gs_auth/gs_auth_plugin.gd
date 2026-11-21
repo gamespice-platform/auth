@@ -3,7 +3,7 @@ extends EditorPlugin
 
 ## Editor entry point for GameSpice Auth. Registers inspector types only.
 
-const _ICON := "res://addons/dot_auth/icon_placeholder.svg"
+const _ICON := "res://addons/gs_auth/icon_placeholder.svg"
 
 
 func _enter_tree() -> void:
@@ -14,25 +14,25 @@ func _enter_tree() -> void:
 	add_custom_type(
 		"GSAuthClient",
 		"Node",
-		load("res://addons/dot_auth/client/dot_auth_client.gd"),
+		load("res://addons/gs_auth/client/gs_auth_client.gd"),
 		icon
 	)
 	add_custom_type(
 		"GSAuthServer",
 		"Node",
-		load("res://addons/dot_auth/server/dot_auth_server.gd"),
+		load("res://addons/gs_auth/server/gs_auth_server.gd"),
 		icon
 	)
 	add_custom_type(
 		"GSAuthIssuer",
 		"Node",
-		load("res://addons/dot_auth/server/dot_auth_issuer.gd"),
+		load("res://addons/gs_auth/server/gs_auth_issuer.gd"),
 		icon
 	)
 	add_custom_type(
 		"GSAuthSessionReporter",
 		"Node",
-		load("res://addons/dot_auth/server/dot_auth_session_reporter.gd"),
+		load("res://addons/gs_auth/server/gs_auth_session_reporter.gd"),
 		icon
 	)
 

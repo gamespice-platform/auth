@@ -49,7 +49,7 @@ enum Strategy {
 @export_group("Token storage")
 
 ## Where the client keeps its refresh token.
-@export var token_store_path: String = "user://dot_auth_tokens.dat"
+@export var token_store_path: String = "user://gs_auth_tokens.dat"
 
 ## Encrypt the token store. On web this is obfuscation only (the key shares the ciphertext's origin); elsewhere it is real at-rest encryption against other users.
 @export var encrypt_token_store: bool = true
@@ -112,7 +112,7 @@ var ticket_public_keys: Dictionary = {}
 @export var allow_guests: bool = false
 
 ## Path to the local accounts file, for [constant Strategy.LOCAL].
-@export var local_accounts_path: String = "user://dot_auth_accounts.json"
+@export var local_accounts_path: String = "user://gs_auth_accounts.json"
 
 ## The issuer this server tells who is playing on it; empty means it does not.
 ##
@@ -133,7 +133,7 @@ var ticket_public_keys: Dictionary = {}
 @export var allow_local_profiles: bool = false
 
 ## Where local profiles are stored. Server side; contains hashed credentials.
-@export var local_profiles_path: String = "user://dot_local_profiles.json"
+@export var local_profiles_path: String = "user://gs_local_profiles.json"
 
 ## Refuse to create more than this many; 0 removes the limit. The backstop behind [member auth_attempts_per_minute].
 @export_range(0, 1000000, 100) var max_local_profiles: int = 5000
@@ -142,7 +142,7 @@ var ticket_public_keys: Dictionary = {}
 @export var local_profile_signup: bool = true
 
 ## Where a CLIENT keeps the secrets servers issued it, keyed by server. Here because a game configures one [GSAuthConfig] for both halves; the wrong place silently loses every profile.
-@export var local_profile_client_path: String = "user://dot_local_profiles.dat"
+@export var local_profile_client_path: String = "user://gs_local_profiles.dat"
 
 @export_group("Issuer")
 
@@ -150,7 +150,7 @@ var ticket_public_keys: Dictionary = {}
 @export_multiline var issuer_private_key: String = ""
 
 ## Name written into the ticket's [code]iss[/code] claim.
-@export var issuer_name: String = "dot-auth"
+@export var issuer_name: String = "gs-auth"
 
 ## Key id written into the ticket header, so verifiers can pick a key during
 ## rotation.
@@ -185,7 +185,7 @@ var ticket_public_keys: Dictionary = {}
 
 
 func env_prefix() -> String:
-	return "DOT_AUTH_"
+	return "GS_AUTH_"
 
 
 func cli_prefix() -> String:
@@ -203,18 +203,18 @@ func sensitive_keys() -> PackedStringArray:
 	])
 
 
-## The addon name [GSAddonConfig] turns into the folder `dot_auth`.
-const CFG_ADDON := "dot-auth"
+## The addon name [GSAddonConfig] turns into the folder `gs_auth`.
+const CFG_ADDON := "gs-auth"
 
 
-## Applies [param file_name] from `cfg/addons/dot_auth/`, then the operator's `cfg/server/addons/dot_auth/`.
+## Applies [param file_name] from `cfg/addons/gs_auth/`, then the operator's `cfg/server/addons/gs_auth/`.
 ## A flat [param legacy_dir]/[param file_name] is still read (one WARN) while no new copy exists.
 ## Secrets stay file-only: the environment and command line still refuse them.
 func apply_cfg_file(file_name: String = "auth.yml", legacy_dir: String = "res://cfg") -> GSResult:
 	return GSAddonConfig.apply_file(CFG_ADDON, file_name, legacy_dir, apply_dictionary)
 
 
-## [method apply_cfg_file], then `DOT_AUTH_*`, `--auth-*` and validation: [method GSConfig.load_layered] for the yml layout.
+## [method apply_cfg_file], then `GS_AUTH_*`, `--auth-*` and validation: [method GSConfig.load_layered] for the yml layout.
 func load_cfg(file_name: String = "auth.yml", legacy_dir: String = "res://cfg") -> GSResult:
 	unknown_keys = PackedStringArray()
 	var file_res := apply_cfg_file(file_name, legacy_dir)

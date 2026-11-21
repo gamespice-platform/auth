@@ -68,7 +68,7 @@ Rate limiting runs before providers, so a custom provider cannot be used to make
 
 ## Coupling with GameSpice Server
 
-GameSpice Auth and GameSpice Server do not import each other; either works alone. `GSAuthServer` registers itself in `GSRegistry` as `dot_auth_server`, and `GSAuthAdminSource` satisfies GameSpice Server's admin-source contract (`lookup(identity) -> GSResult{flags, immunity, source}` plus `source_name()`) by duck typing. The other direction is duck-typed too: `GSAuthServer` finds `dot_server` in `GSRegistry` for its session reporter and reads only `sessions()`, `uid()`, `is_authenticated()`, `state_changed` and `state_name()` ([tickets](tickets.md#who-builds-the-reporter-and-which-stops-it-reports)). GameSpice Server is linked into this project only for that suite. Keep it that way: a hard dependency in either direction makes both harder to adopt.
+GameSpice Auth and GameSpice Server do not import each other; either works alone. `GSAuthServer` registers itself in `GSRegistry` as `gs_auth_server`, and `GSAuthAdminSource` satisfies GameSpice Server's admin-source contract (`lookup(identity) -> GSResult{flags, immunity, source}` plus `source_name()`) by duck typing. The other direction is duck-typed too: `GSAuthServer` finds `gs_server` in `GSRegistry` for its session reporter and reads only `sessions()`, `uid()`, `is_authenticated()`, `state_changed` and `state_name()` ([tickets](tickets.md#who-builds-the-reporter-and-which-stops-it-reports)). GameSpice Server is linked into this project only for that suite. Keep it that way: a hard dependency in either direction makes both harder to adopt.
 
 ## Deliberately not here
 

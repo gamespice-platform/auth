@@ -34,7 +34,7 @@ func _ready() -> void:
 	_issuer = GSAuthIssuer.new()
 	_issuer.name = "Issuer"
 	_issuer.config = config
-	_issuer.config_file = "user://dot_auth_issuer.json"
+	_issuer.config_file = "user://gs_auth_issuer.json"
 	_issuer.private_key_file = ProjectSettings.globalize_path(private_path)
 	_issuer.listen_port = 8787
 	_issuer.bind_address = "127.0.0.1"

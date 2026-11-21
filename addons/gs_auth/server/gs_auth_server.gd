@@ -1,13 +1,13 @@
 @tool
 class_name GSAuthServer
-extends "res://addons/dot_auth/server/dot_auth_server_local.gd"
+extends "res://addons/gs_auth/server/gs_auth_server_local.gd"
 
-## Decides who a connecting client is: the game server's side of dot-auth.
+## Decides who a connecting client is: the game server's side of gs-auth.
 ##
-## GameSpice Server calls [method authenticate] with the client's credential and gets a [GSAuthIdentity] or a refusal; [member GSAuthConfig.strategy] picks the method. Registers as [code]dot_auth_server[/code] in [GSRegistry], and builds the [GSAuthSessionReporter] when [member GSAuthConfig.session_report_url] is set. Usage: docs/rationale.md.
+## GameSpice Server calls [method authenticate] with the client's credential and gets a [GSAuthIdentity] or a refusal; [member GSAuthConfig.strategy] picks the method. Registers as [code]gs_auth_server[/code] in [GSRegistry], and builds the [GSAuthSessionReporter] when [member GSAuthConfig.session_report_url] is set. Usage: docs/rationale.md.
 
 ## Registry name GameSpice Server looks for.
-const SERVICE := &"dot_auth_server"
+const SERVICE := &"gs_auth_server"
 
 ## What a join token starts with (website-city's `JOIN_TOKEN_PREFIX`).
 const JOIN_TOKEN_PREFIX := "tmc_jt_"
@@ -16,7 +16,7 @@ signal authenticated(identity: GSAuthIdentity)
 signal rejected(reason: String, detail: String)
 @export_group("Configuration")
 
-@export var config_file: String = "user://dot_auth_server.json"
+@export var config_file: String = "user://gs_auth_server.json"
 
 ## Register in [GSRegistry] on ready. Turn off for two servers in one process that
 ## register scoped names themselves ([method GSRegistry.register_scoped]).
@@ -251,16 +251,16 @@ func _build_session_reporter() -> void:
 	add_child(session_reporter)
 
 	# The GameSpice Server may boot before or after this node starts.
-	var server := GSRegistry.get_service(&"dot_server")
+	var server := GSRegistry.get_service(&"gs_server")
 	if server != null:
 		session_reporter.follow_server(server)
 	else:
 		GSRegistry.signals().service_registered.connect(_on_service_registered)
-		GSLog.debug(CHANNEL, "session reporter waiting for a dot_server to follow")
+		GSLog.debug(CHANNEL, "session reporter waiting for a gs_server to follow")
 
 
 func _on_service_registered(service: StringName, instance: Object) -> void:
-	if service != &"dot_server" or session_reporter == null:
+	if service != &"gs_server" or session_reporter == null:
 		return
 	GSRegistry.signals().service_registered.disconnect(_on_service_registered)
 	session_reporter.follow_server(instance)

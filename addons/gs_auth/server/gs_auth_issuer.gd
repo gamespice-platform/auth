@@ -21,7 +21,7 @@ signal session_conflict(uid: String, held_server: String, wanted_server: String)
 
 @export var config: GSAuthConfig = null
 
-@export var config_file: String = "user://dot_auth_issuer.json"
+@export var config_file: String = "user://gs_auth_issuer.json"
 
 ## Read the signing key from this file instead of [member GSAuthConfig.issuer_private_key], so it never sits in a config the process might dump to a log.
 @export_global_file("*.key", "*.pem") var private_key_file: String = ""

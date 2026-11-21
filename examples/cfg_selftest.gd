@@ -3,9 +3,9 @@ extends Node
 ## The yml layout of GameSpice Auth's settings: the new path, the flat shim and the operator's layer.
 ## Run: timeout 120 godot --headless --path . res://examples/cfg_selftest.tscn
 
-const FOLDER := "dot_auth"
+const FOLDER := "gs_auth"
 const FILE := "auth.yml"
-const LEGACY := "user://dot_auth_cfg_selftest_legacy"
+const LEGACY := "user://gs_auth_cfg_selftest_legacy"
 
 const SECTIONS := 1
 const CHECKS := 10
@@ -21,7 +21,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	print("dot-auth cfg self-test")
+	print("gs-auth cfg self-test")
 	var addon_dir := "user://cfg/addons/" + FOLDER
 	var server_dir := "user://cfg/server/addons/" + FOLDER
 	_clean(addon_dir, server_dir)
@@ -46,18 +46,18 @@ func _run() -> void:
 	res = config.load_cfg(FILE, LEGACY)
 	_check(res.ok and config.refresh_margin_sec == 300.0, "the operator's server layer wins")
 	_check(config.issuer_private_key == "from-file", "a secret in a file is read")
-	OS.set_environment("DOT_AUTH_INTEGRATION_TOKEN", "from-env")
+	OS.set_environment("GS_AUTH_INTEGRATION_TOKEN", "from-env")
 	config = GSAuthConfig.new()
 	config.load_cfg(FILE, LEGACY)
 	_check(config.integration_token == "", "and the environment cannot set one")
-	OS.unset_environment("DOT_AUTH_INTEGRATION_TOKEN")
+	OS.unset_environment("GS_AUTH_INTEGRATION_TOKEN")
 
 	_clean(addon_dir, server_dir)
 	GSCfgLegacy.reset()
 	_write("user://cfg/server/" + FOLDER + "/" + FILE, "strategy: 1\nrefresh_margin_sec: 400.0\n")
 	config = GSAuthConfig.new()
 	res = config.load_cfg(FILE, LEGACY)
-	_check(res.ok and config.refresh_margin_sec == 400.0, "the old cfg/server/dot_auth/ still loads")
+	_check(res.ok and config.refresh_margin_sec == 400.0, "the old cfg/server/gs_auth/ still loads")
 	_check(GSCfgLegacy.warned_count() == 1, "and warns once")
 	GSPaths.remove_tree("user://cfg/server/" + FOLDER)
 

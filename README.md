@@ -4,7 +4,7 @@ Sign-in for Godot 4.7+ games and dedicated servers. A player signs in against a 
 
 ## Install
 
-1. Copy `addons/dot_core/` and `addons/dot_auth/` into your project.
+1. Copy `addons/gs_core/` and `addons/gs_auth/` into your project.
 2. Enable both in *Project > Project Settings > Plugins*.
 
 ## Client
@@ -98,9 +98,9 @@ The server issues the credential. The client does not just claim a name, so typi
 
 ## Configuration
 
-Defaults live in `cfg/addon/dot_auth/auth.yml`. A game overrides them in `cfg/game/<game>/dot_auth/`, and the server operator in `cfg/server/addon/dot_auth/` or `cfg/server/game/<game>/dot_auth/` (strongest). See [dot-core's addon-config.md](https://github.com/gamespice-platform/core/blob/main/docs/addon-config.md).
+Defaults live in `cfg/addon/gs_auth/auth.yml`. A game overrides them in `cfg/game/<game>/gs_auth/`, and the server operator in `cfg/server/addon/gs_auth/` or `cfg/server/game/<game>/gs_auth/` (strongest). See [gs-core's addon-config.md](https://github.com/gamespice-platform/core/blob/main/docs/addon-config.md).
 
-`GSAuthConfig.new().load_cfg()` reads these files, then `DOT_AUTH_*` environment variables and `--auth-*` command-line flags. Secrets (`issuer_private_key`, `integration_token`, `session_report_key`) are read from a file only, never from the environment or command line.
+`GSAuthConfig.new().load_cfg()` reads these files, then `GS_AUTH_*` environment variables and `--auth-*` command-line flags. Secrets (`issuer_private_key`, `integration_token`, `session_report_key`) are read from a file only, never from the environment or command line.
 
 ## Also included
 

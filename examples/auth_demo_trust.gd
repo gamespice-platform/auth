@@ -20,8 +20,8 @@ func _test_backbone_registry() -> void:
 	var started := client.start()
 	_check("the client starts", started.ok, started)
 	_check(
-		"and publishes itself under dot_backbone_client",
-		GSRegistry.get_service(&"dot_backbone_client") == client,
+		"and publishes itself under gs_backbone_client",
+		GSRegistry.get_service(&"gs_backbone_client") == client,
 		GSResult.success(null)
 	)
 
@@ -30,7 +30,7 @@ func _test_backbone_registry() -> void:
 	await get_tree().process_frame
 	_check(
 		"and takes the registration with it",
-		GSRegistry.get_service(&"dot_backbone_client") == null,
+		GSRegistry.get_service(&"gs_backbone_client") == null,
 		GSResult.success(null)
 	)
 	_done()

@@ -1,6 +1,6 @@
 @tool
 class_name GSAuthClient
-extends "res://addons/dot_auth/client/dot_auth_client_envelope.gd"
+extends "res://addons/gs_auth/client/gs_auth_client_envelope.gd"
 
 ## Signs a player in against the website-city backbone and keeps them signed in.
 ##
@@ -10,7 +10,7 @@ const CHANNEL := "auth"
 
 ## The registry name this client takes, so a game running under a shell that signed the
 ## player in can find out who it is without being handed the shell's internals.
-const SERVICE := &"dot_auth_client"
+const SERVICE := &"gs_auth_client"
 
 ## Emitted once the backbone has issued a device code. Open [param verification_uri_complete]
 ## (code pre-filled); [param user_code] is for typing on another device.
@@ -37,7 +37,7 @@ signal session_revoked(reason: String)
 
 @export var config: GSAuthConfig = null
 
-@export var config_file: String = "user://dot_auth.json"
+@export var config_file: String = "user://gs_auth.json"
 
 ## Sign in automatically from stored credentials when the node enters the tree.
 @export var auto_sign_in: bool = true
@@ -101,7 +101,7 @@ func start() -> GSResult:
 	_http = GSHttp.new()
 	_http.name = "AuthHttp"
 	_http.base_url = config.backbone_url
-	_http.user_agent = "%s/%s (dot-auth)" % [
+	_http.user_agent = "%s/%s (gs-auth)" % [
 		config.client_name, config.client_version
 	]
 	_http.timeout_sec = 20.0

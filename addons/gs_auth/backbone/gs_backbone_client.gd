@@ -9,7 +9,7 @@ extends Node
 const CHANNEL := "backbone"
 
 ## Registry name, so consumers (chat relay, stats reporter, leaderboard) find the client without the host wiring each one.
-const SERVICE := &"dot_backbone_client"
+const SERVICE := &"gs_backbone_client"
 
 ## Scopes the backbone requires. Documented here so a misconfigured integration
 ## produces a useful log line rather than an opaque 403.

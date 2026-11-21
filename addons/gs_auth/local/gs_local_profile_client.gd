@@ -157,7 +157,7 @@ static func _passphrase() -> String:
 	var machine := GSPlatform.unique_id()
 
 	return GSHash.sha256_text(
-		"dot-auth:local-profiles:%s" % (machine if machine != "" else "web")
+		"gs-auth:local-profiles:%s" % (machine if machine != "" else "web")
 	)
 
 

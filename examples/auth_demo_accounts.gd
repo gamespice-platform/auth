@@ -42,7 +42,7 @@ func _test_pkce() -> void:
 func _test_local_accounts() -> void:
 	_section("[b]local accounts[/b]")
 
-	var path := "user://dot_auth_test_accounts.json"
+	var path := "user://gs_auth_test_accounts.json"
 	DirAccess.remove_absolute(path)
 
 	var config := GSAuthConfig.new()
@@ -121,7 +121,7 @@ func _test_refusals_are_logged() -> void:
 	GSLog.set_channel_level(GSAuthServer.CHANNEL, GSLog.Level.DEBUG)
 	GSLog.signals().record.connect(capture)
 
-	var path := "user://dot_auth_test_refusals.json"
+	var path := "user://gs_auth_test_refusals.json"
 	DirAccess.remove_absolute(path)
 	var config := GSAuthConfig.new()
 	config.strategy = GSAuthConfig.Strategy.LOCAL
@@ -302,7 +302,7 @@ func _test_admin_source() -> void:
 func _test_token_store() -> void:
 	_section("[b]token store[/b]")
 
-	var path := "user://dot_auth_test_tokens.dat"
+	var path := "user://gs_auth_test_tokens.dat"
 	DirAccess.remove_absolute(path)
 	DirAccess.remove_absolute(path + ".salt")
 
@@ -379,7 +379,7 @@ func _test_providers() -> void:
 
 	var config := GSAuthConfig.new()
 	config.strategy = GSAuthConfig.Strategy.LOCAL
-	config.local_accounts_path = "user://dot_auth_provider_test.json"
+	config.local_accounts_path = "user://gs_auth_provider_test.json"
 	config.allow_guests = false
 
 	var server := GSAuthServer.new()

@@ -1,10 +1,10 @@
 # The backbone: contracts and the URL
 
-The family's view of website-city is in [docs/backbone.md](../../../docs/backbone.md); this is dot-auth's half.
+The family's view of website-city is in [docs/backbone.md](../../../docs/backbone.md); this is gs-auth's half.
 
 ## Contracts this code depends on
 
-Verified against website-city's source. If these drift, dot-auth breaks here:
+Verified against website-city's source. If these drift, gs-auth breaks here:
 
 | Endpoint | Contract source | Used by |
 | --- | --- | --- |
@@ -36,4 +36,4 @@ Details that are easy to get wrong and are already handled:
 
 `GSAuthConfig.backbone_url` defaults to `https://moddingcommunity.com`. A default endpoint decides where a device-code grant (the opening request of an authentication flow) is sent, so a wrong default that does not resolve fails loudly, and the same wrong default the day somebody registers the name fails *quietly*. Check any default URL against what website-city actually serves. See [history](history.md).
 
-**Overriding it.** It is an ordinary `GSConfig` field: `GS_AUTH_BACKBONE_URL`, `--auth-backbone-url` and a JSON file, layered by `GSAuthClient.start()`. A browser build has neither an environment nor an argv, so a web client is told through a JSON file shipped in its export; `dot-server-deploy/client/auth.json` is the worked example. It is deliberately **not** read from the page's query string: this URL decides where a single-use sign-in code is redeemed, and a link that could aim it at another host would be a credential-forwarding link.
+**Overriding it.** It is an ordinary `GSConfig` field: `GS_AUTH_BACKBONE_URL`, `--auth-backbone-url` and a JSON file, layered by `GSAuthClient.start()`. A browser build has neither an environment nor an argv, so a web client is told through a JSON file shipped in its export; `gs-server-deploy/client/auth.json` is the worked example. It is deliberately **not** read from the page's query string: this URL decides where a single-use sign-in code is redeemed, and a link that could aim it at another host would be a credential-forwarding link.

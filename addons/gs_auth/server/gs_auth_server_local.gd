@@ -1,7 +1,7 @@
 @tool
 ## Base of [GSAuthServer]: local accounts, guests and requested display names.
 ## Path-based, no class_name: it exists to keep each script under the size budget.
-extends "res://addons/dot_auth/server/dot_auth_server_trust.gd"
+extends "res://addons/gs_auth/server/gs_auth_server_trust.gd"
 
 ## Local accounts, for [constant GSAuthConfig.Strategy.LOCAL].
 var _accounts: Dictionary = {}

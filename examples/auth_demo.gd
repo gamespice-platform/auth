@@ -1,6 +1,6 @@
 extends "res://examples/auth_demo_accounts.gd"
 
-## Exercises the parts of dot-auth that can be tested without a backbone (the device flow needs a human clicking Approve).
+## Exercises the parts of gs-auth that can be tested without a backbone (the device flow needs a human clicking Approve).
 ##
 ## Covers ticket minting and offline verification, audience scoping, replay, connection binding, key rotation and revocation, expiry and skew, tampering, algorithm confusion, PKCE, local accounts, admin mapping, the token store, and one seat per account. Run: examples/auth_demo.tscn.
 
@@ -26,7 +26,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	_line("[b]dot-auth self-test[/b]")
+	_line("[b]gs-auth self-test[/b]")
 	_line("")
 
 	var keys := GSCloudKeys_generate()
@@ -97,7 +97,7 @@ func _test_scoped_introspect() -> void:
 			and fake.asked[0][1].get("access_token") == "live", got)
 	_check("the identity is keyed by the site's scoped key, not an account id",
 		who != null and who.uid == "tmc:Kq3_scopedKey-forThis1", got)
-	_check("and carries that key for dot-user to file the profile under",
+	_check("and carries that key for gs-user to file the profile under",
 		who != null and who.claims.get("scoped_key") == "Kq3_scopedKey-forThis1", got)
 	_check("with the member's name", who != null and who.display_name == "Ada", got)
 
@@ -197,7 +197,7 @@ func _test_tickets(keys: Dictionary) -> void:
 	identity.claims = {"groups": ["moderators"], "supporter": true}
 
 	var minted := GSAuthTicket.issue(
-		identity, SERVER_A, str(keys["private"]), "dot-auth-test", 300
+		identity, SERVER_A, str(keys["private"]), "gs-auth-test", 300
 	)
 	_check("mint", minted.ok, minted)
 	if not minted.ok:
@@ -251,7 +251,7 @@ func _test_tickets(keys: Dictionary) -> void:
 	# Algorithm confusion: sign an HS256 token using the RSA *public* key as the
 	# HMAC secret — which is public — and offer it where RS256 is expected. A
 	# verifier that dispatches on the token's own `alg` header accepts this.
-	var claims := GSJwt.base_claims("dot-auth-test", identity.uid, SERVER_A, 300)
+	var claims := GSJwt.base_claims("gs-auth-test", identity.uid, SERVER_A, 300)
 	var hs := GSJwt.encode_hs256(claims, str(keys["public"]))
 	if hs.ok:
 		var confused := GSAuthTicket.verify(
@@ -265,7 +265,7 @@ func _test_tickets(keys: Dictionary) -> void:
 
 	# Expiry, with leeway set to zero so a negative TTL is genuinely past.
 	var expired := GSAuthTicket.issue(
-		identity, SERVER_A, str(keys["private"]), "dot-auth-test", -600
+		identity, SERVER_A, str(keys["private"]), "gs-auth-test", -600
 	)
 	if expired.ok:
 		var exp_check := GSAuthTicket.verify(
@@ -341,7 +341,7 @@ func _test_tickets(keys: Dictionary) -> void:
 	)
 
 	var fresh := GSAuthTicket.issue(
-		identity, SERVER_A, str(keys["private"]), "dot-auth-test", 300
+		identity, SERVER_A, str(keys["private"]), "gs-auth-test", 300
 	)
 	var impersonate := await server.authenticate(
 		{"ticket": str(fresh.value), "name": "Administrator"}, "peer6"
@@ -409,7 +409,7 @@ func _test_single_session(keys: Dictionary) -> void:
 
 	var config := GSAuthConfig.new()
 	config.issuer_private_key = str(keys["private"])
-	config.issuer_name = "dot-auth-test"
+	config.issuer_name = "gs-auth-test"
 	# Nothing here may reach the real backbone. The one request below that
 	# would — a ticket request over the socket — fails at this address instead,
 	# quickly and offline.
