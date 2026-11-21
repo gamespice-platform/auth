@@ -9,12 +9,12 @@ const KEY_DIR := "user://issuer_keys"
 ## How long to stay up, from `--seconds N`; zero means forever. A daemon never exits, so a sweep of examples needs this bound (a headless Godot ignores SIGTERM).
 var _seconds := 0.0
 
-var _issuer: DotAuthIssuer
+var _issuer: GSAuthIssuer
 
 
 func _ready() -> void:
-	DotLog.set_level(DotLog.Level.INFO)
-	DotLog.timestamps = true
+	GSLog.set_level(GSLog.Level.INFO)
+	GSLog.timestamps = true
 
 	var argv := OS.get_cmdline_user_args()
 	var seconds_at := argv.find("--seconds")
@@ -27,11 +27,11 @@ func _ready() -> void:
 	if not _ensure_keys(private_path, public_path):
 		return
 
-	var config := DotAuthConfig.new()
+	var config := GSAuthConfig.new()
 	config.apply_env()
 	config.apply_cli()
 
-	_issuer = DotAuthIssuer.new()
+	_issuer = GSAuthIssuer.new()
 	_issuer.name = "Issuer"
 	_issuer.config = config
 	_issuer.config_file = "user://dot_auth_issuer.json"
@@ -57,7 +57,7 @@ func _ready() -> void:
 	)
 
 	_issuer.ticket_issued.connect(
-		func(identity: DotAuthIdentity, server_id: String) -> void:
+		func(identity: GSAuthIdentity, server_id: String) -> void:
 			print("issued: %s -> %s" % [identity.label(), server_id])
 	)
 
@@ -90,21 +90,21 @@ func _ready() -> void:
 func _ensure_keys(private_path: String, public_path: String) -> bool:
 	if not FileAccess.file_exists(private_path):
 		print("No signing key found; generating one.")
-		var pair := DotCloudSignature_generate()
+		var pair := GSCloudSignature_generate()
 		if pair.is_empty():
 			push_error("Could not generate a keypair.")
 			get_tree().quit(1)
 			return false
 
-		DotPaths.write_text(private_path, str(pair["private"]))
-		DotPaths.write_text(public_path, str(pair["public"]))
+		GSPaths.write_text(private_path, str(pair["private"]))
+		GSPaths.write_text(public_path, str(pair["public"]))
 
 		print("")
 		print("Wrote %s" % private_path)
 		print("Wrote %s" % public_path)
 		print("")
 		print("Give the PUBLIC key to every game server operator. They set it as")
-		print("DotAuthConfig.ticket_public_key. Keep the private key here.")
+		print("GSAuthConfig.ticket_public_key. Keep the private key here.")
 		print("")
 	return true
 
@@ -115,7 +115,7 @@ func _shut_down(reason: String) -> void:
 
 
 ## Local RSA keypair helper.
-func DotCloudSignature_generate() -> Dictionary:
+func GSCloudSignature_generate() -> Dictionary:
 	var crypto := Crypto.new()
 	var key := crypto.generate_rsa(3072)
 	if key == null:

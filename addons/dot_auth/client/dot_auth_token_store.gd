@@ -1,4 +1,4 @@
-class_name DotAuthTokenStore
+class_name GSAuthTokenStore
 extends RefCounted
 
 ## Persists the client's credential pair between runs.
@@ -16,7 +16,7 @@ var encrypt: bool
 var _access_token: String = ""
 var _refresh_token: String = ""
 var _expires_at: int = 0
-var _identity: DotAuthIdentity = null
+var _identity: GSAuthIdentity = null
 var _loaded: bool = false
 
 
@@ -34,7 +34,7 @@ func refresh_token() -> String:
 	return _refresh_token
 
 
-func identity() -> DotAuthIdentity:
+func identity() -> GSAuthIdentity:
 	return _identity
 
 
@@ -63,8 +63,8 @@ func set_tokens(
 	access: String,
 	refresh: String,
 	expires_in_sec: int,
-	p_identity: DotAuthIdentity = null
-) -> DotResult:
+	p_identity: GSAuthIdentity = null
+) -> GSResult:
 	_access_token = access
 	_refresh_token = refresh
 	_expires_at = int(Time.get_unix_time_from_system()) + expires_in_sec
@@ -87,55 +87,55 @@ func clear() -> void:
 	if FileAccess.file_exists(salt):
 		DirAccess.remove_absolute(salt)
 
-	DotWeb.sync_filesystem()
-	DotLog.debug(CHANNEL, "credentials cleared")
+	GSWeb.sync_filesystem()
+	GSLog.debug(CHANNEL, "credentials cleared")
 
 
 
-func load_tokens() -> DotResult:
+func load_tokens() -> GSResult:
 	_loaded = true
 
 	if not FileAccess.file_exists(path):
-		return DotResult.success(false)
+		return GSResult.success(false)
 
-	var read: DotResult
+	var read: GSResult
 	if encrypt:
-		read = DotPaths.read_encrypted(path, _passphrase())
+		read = GSPaths.read_encrypted(path, _passphrase())
 	else:
-		read = DotPaths.read_bytes(path)
+		read = GSPaths.read_bytes(path)
 
 	if not read.ok:
 		# An unreadable store counts as no store (usually a device-identity change): signing in again beats a launch that refuses.
-		DotLog.info(
+		GSLog.info(
 			CHANNEL,
 			"stored credentials could not be read; signing in again",
 			{"why": read.error.code}
 		)
 		clear()
-		return DotResult.success(false)
+		return GSResult.success(false)
 
 	var bytes: PackedByteArray = read.value
 	var parsed: Variant = JSON.parse_string(bytes.get_string_from_utf8())
 
 	if not (parsed is Dictionary):
 		clear()
-		return DotResult.success(false)
+		return GSResult.success(false)
 
 	var d := parsed as Dictionary
 
 	if int(d.get("version", 0)) != FORMAT_VERSION:
-		DotLog.info(CHANNEL, "credential format changed; signing in again")
+		GSLog.info(CHANNEL, "credential format changed; signing in again")
 		clear()
-		return DotResult.success(false)
+		return GSResult.success(false)
 
 	_access_token = str(d.get("access_token", ""))
 	_refresh_token = str(d.get("refresh_token", ""))
 	_expires_at = int(d.get("expires_at", 0))
 
 	if d.get("identity") is Dictionary:
-		_identity = DotAuthIdentity.from_dict(d["identity"])
+		_identity = GSAuthIdentity.from_dict(d["identity"])
 
-	DotLog.debug(
+	GSLog.debug(
 		CHANNEL,
 		"credentials loaded",
 		{
@@ -144,10 +144,10 @@ func load_tokens() -> DotResult:
 		}
 	)
 
-	return DotResult.success(has_credentials())
+	return GSResult.success(has_credentials())
 
 
-func save() -> DotResult:
+func save() -> GSResult:
 	var payload := {
 		"version": FORMAT_VERSION,
 		"access_token": _access_token,
@@ -161,8 +161,8 @@ func save() -> DotResult:
 	var bytes := JSON.stringify(payload).to_utf8_buffer()
 
 	if encrypt:
-		return DotPaths.write_encrypted(path, bytes, _passphrase())
-	return DotPaths.write_bytes(path, bytes)
+		return GSPaths.write_encrypted(path, bytes, _passphrase())
+	return GSPaths.write_bytes(path, bytes)
 
 
 func is_loaded() -> bool:
@@ -172,7 +172,7 @@ func is_loaded() -> bool:
 
 ## Passphrase for the encrypted store: a random per-install salt beside it plus a device-stable string, so a copied pair is unreadable elsewhere.
 func _passphrase() -> String:
-	return DotHash.sha256_text("dot-auth/v1|%s|%s" % [_salt(), _device_seed()])
+	return GSHash.sha256_text("dot-auth/v1|%s|%s" % [_salt(), _device_seed()])
 
 
 func _salt_path() -> String:
@@ -183,12 +183,12 @@ func _salt() -> String:
 	var salt_file := _salt_path()
 
 	if FileAccess.file_exists(salt_file):
-		var read := DotPaths.read_text(salt_file)
+		var read := GSPaths.read_text(salt_file)
 		if read.ok and str(read.value).length() >= 16:
 			return str(read.value)
 
-	var salt := DotHash.random_hex(32)
-	DotPaths.write_text(salt_file, salt)
+	var salt := GSHash.random_hex(32)
+	GSPaths.write_text(salt_file, salt)
 	return salt
 
 
@@ -197,7 +197,7 @@ func _device_seed() -> String:
 	var parts := PackedStringArray()
 	parts.append(OS.get_name())
 
-	var uid := DotPlatform.unique_id()
+	var uid := GSPlatform.unique_id()
 	if uid != "":
 		parts.append(uid)
 	else:

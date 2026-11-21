@@ -1,36 +1,36 @@
-class_name DotAuthTicket
+class_name GSAuthTicket
 extends RefCounted
 
 ## A short-lived, audience-scoped, single-use, RS256-signed credential proving who a connecting player is.
 ##
-## Encoded as a compact JWS, see [DotJwt]. Why a ticket and not the account token: docs/tickets.md.
+## Encoded as a compact JWS, see [GSJwt]. Why a ticket and not the account token: docs/tickets.md.
 
 const CHANNEL := "auth.ticket"
 
 
 ## Mints a ticket. Issuer side only; needs the private key.
 static func issue(
-	identity: DotAuthIdentity,
+	identity: GSAuthIdentity,
 	server_id: String,
 	private_key_pem: String,
 	issuer_name: String,
 	ttl_sec: int,
 	key_id: String = "default",
 	nonce: String = ""
-) -> DotResult:
+) -> GSResult:
 	if server_id.strip_edges() == "":
-		return DotResult.fail(
-			DotError.CODE_INVALID,
+		return GSResult.fail(
+			GSError.CODE_INVALID,
 			"A ticket must name a server.",
 			"an unscoped ticket is valid everywhere, which defeats the purpose"
 		)
 
 	if not identity.is_valid():
-		return DotResult.fail(
-			DotError.CODE_INVALID, "Cannot issue a ticket for an invalid identity."
+		return GSResult.fail(
+			GSError.CODE_INVALID, "Cannot issue a ticket for an invalid identity."
 		)
 
-	var claims := DotJwt.base_claims(
+	var claims := GSJwt.base_claims(
 		issuer_name, identity.uid, server_id, ttl_sec
 	)
 
@@ -50,10 +50,10 @@ static func issue(
 	if nonce != "":
 		claims["nonce"] = nonce
 
-	return DotJwt.encode_rs256(claims, private_key_pem, key_id)
+	return GSJwt.encode_rs256(claims, private_key_pem, key_id)
 
 
-## Verifies a ticket and returns its [DotAuthIdentity].
+## Verifies a ticket and returns its [GSAuthIdentity].
 ##
 ## [param expected_server_id] must match the audience; [code]""[/code] disables the check and makes every ticket universal.
 static func verify(
@@ -61,8 +61,8 @@ static func verify(
 	public_key_pem: String,
 	expected_server_id: String,
 	leeway_sec: int = 60
-) -> DotResult:
-	var verified := DotJwt.verify_rs256(ticket, public_key_pem, leeway_sec)
+) -> GSResult:
+	var verified := GSJwt.verify_rs256(ticket, public_key_pem, leeway_sec)
 	if not verified.ok:
 		return verified
 
@@ -71,14 +71,14 @@ static func verify(
 	var audience := str(claims.get("aud", ""))
 	if expected_server_id != "":
 		if audience != expected_server_id:
-			return DotResult.fail(
-				DotError.CODE_FORBIDDEN,
+			return GSResult.fail(
+				GSError.CODE_FORBIDDEN,
 				"This ticket was issued for a different server.",
 				"ticket names '%s', this server is '%s'"
 					% [audience, expected_server_id]
 			)
 	else:
-		DotLog.warn(
+		GSLog.warn(
 			CHANNEL,
 			"verifying a ticket without checking its audience — any ticket for "
 			+ "any server will be accepted"
@@ -86,11 +86,11 @@ static func verify(
 
 	var subject := str(claims.get("sub", ""))
 	if subject == "":
-		return DotResult.fail(
-			DotError.CODE_INVALID, "The ticket names no user."
+		return GSResult.fail(
+			GSError.CODE_INVALID, "The ticket names no user."
 		)
 
-	var identity := DotAuthIdentity.new()
+	var identity := GSAuthIdentity.new()
 	identity.uid = subject
 	identity.provider = str(claims.get("provider", "backbone"))
 	# uid is namespaced "provider:id"; recovering the bare id keeps the two
@@ -109,7 +109,7 @@ static func verify(
 	if identity.display_name == "":
 		identity.display_name = identity.username if identity.username != "" else "Player"
 
-	return DotResult.success({
+	return GSResult.success({
 		"identity": identity,
 		"jti": str(claims.get("jti", "")),
 		"exp": int(claims.get("exp", 0)),
@@ -119,7 +119,7 @@ static func verify(
 
 ## Reads a ticket's audience without verifying it; for routing only, never for authorisation.
 static func peek_audience(ticket: String) -> String:
-	var peeked := DotJwt.peek(ticket)
+	var peeked := GSJwt.peek(ticket)
 	if not peeked.ok:
 		return ""
 	var d: Dictionary = peeked.value

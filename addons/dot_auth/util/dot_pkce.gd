@@ -1,4 +1,4 @@
-class_name DotPkce
+class_name GSPkce
 extends RefCounted
 
 ## PKCE verifier/challenge pairs for the backbone's device flow; S256 only, never [code]plain[/code].
@@ -10,7 +10,7 @@ const VERIFIER_BYTES := 32
 
 ## Generates a verifier and its S256 challenge as [code]{verifier, challenge, method}[/code]; keep the verifier in memory only.
 static func generate() -> Dictionary:
-	var verifier := DotHash.random_token(VERIFIER_BYTES)
+	var verifier := GSHash.random_token(VERIFIER_BYTES)
 	return {
 		"verifier": verifier,
 		"challenge": challenge_for(verifier),
@@ -23,12 +23,12 @@ static func challenge_for(verifier: String) -> String:
 	var ctx := HashingContext.new()
 	ctx.start(HashingContext.HASH_SHA256)
 	ctx.update(verifier.to_ascii_buffer())
-	return DotHash.base64url_encode(ctx.finish())
+	return GSHash.base64url_encode(ctx.finish())
 
 
 ## Checks a verifier against a challenge. For an issuer implementing the flow.
 static func verify(verifier: String, challenge: String) -> bool:
-	return DotHash.constant_time_equal(
+	return GSHash.constant_time_equal(
 		challenge_for(verifier).to_utf8_buffer(),
 		challenge.to_utf8_buffer()
 	)

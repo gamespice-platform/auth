@@ -1,5 +1,5 @@
 @tool
-class_name DotBackboneClient
+class_name GSBackboneClient
 extends Node
 
 ## Reports a dedicated server's own state to its listing on the backbone, with a server-scoped credential.
@@ -20,24 +20,24 @@ const SCOPE_USERS := "SERVER_USERS"
 const MAX_REPORTED_PLAYERS := 512
 
 ## Emitted after each report, successful or not.
-signal reported(kind: String, result: DotResult)
+signal reported(kind: String, result: GSResult)
 
-@export var config: DotAuthConfig = null
+@export var config: GSAuthConfig = null
 
 ## Report automatically on a timer once [method start] has run.
 @export var auto_report: bool = true
 
 ## Retries after a retryable failure (transport, 5xx, 429); 0 sends once.
 ##
-## Retried HERE, not in [DotHttp]: every attempt needs its own [code]ts[/code] and
+## Retried HERE, not in [GSHttp]: every attempt needs its own [code]ts[/code] and
 ## [code]nonce[/code], because the backbone remembers a nonce and refuses it the second
-## time. DotHttp resending the same bytes turned a real 500 into a 400 "Unauthorized" on
+## time. GSHttp resending the same bytes turned a real 500 into a 400 "Unauthorized" on
 ## the retry, and the 500 was never logged.
 @export_range(0, 10, 1, "or_greater") var max_retries: int = 2
 
-var _http: DotHttp = null
+var _http: GSHttp = null
 var _timer: Timer = null
-var _limiter: DotRateLimiter = null
+var _limiter: GSRateLimiter = null
 var _started: bool = false
 
 ## Supplies the current server state at report time (set by GameSpice Server), sampled when sent, not when it last changed.
@@ -53,24 +53,24 @@ var _last_error: String = ""
 var _report_count: int = 0
 
 
-func start() -> DotResult:
+func start() -> GSResult:
 	if _started:
-		return DotResult.success(self)
+		return GSResult.success(self)
 
 	if config == null:
-		return DotResult.fail(
-			DotError.CODE_STATE, "DotBackboneClient has no config."
+		return GSResult.fail(
+			GSError.CODE_STATE, "GSBackboneClient has no config."
 		)
 
 	if config.integration_token.strip_edges() == "":
-		return DotResult.fail(
-			DotError.CODE_STATE,
+		return GSResult.fail(
+			GSError.CODE_STATE,
 			"No integration token; server reporting is off.",
 			"create a server-scoped integration on the site and set "
-			+ "DotAuthConfig.integration_token"
+			+ "GSAuthConfig.integration_token"
 		)
 
-	_http = DotHttp.new()
+	_http = GSHttp.new()
 	_http.name = "BackboneHttp"
 	_http.timeout_sec = 15.0
 	# Signed requests are retried by _signed(), re-stamped each time; see max_retries.
@@ -79,7 +79,7 @@ func start() -> DotResult:
 
 	# A local ceiling so a bug — a retry loop, a stuck timer — cannot get the
 	# server's credential rate-limited or revoked by the backbone.
-	_limiter = DotRateLimiter.new(
+	_limiter = GSRateLimiter.new(
 		float(config.backbone_requests_per_minute) / 60.0,
 		float(config.backbone_requests_per_minute)
 	)
@@ -94,9 +94,9 @@ func start() -> DotResult:
 	_started = true
 
 	if register_as != &"":
-		DotRegistry.register(register_as, self)
+		GSRegistry.register(register_as, self)
 
-	DotLog.info(
+	GSLog.info(
 		CHANNEL,
 		"backbone reporting ready",
 		{
@@ -106,12 +106,12 @@ func start() -> DotResult:
 		}
 	)
 
-	return DotResult.success(self)
+	return GSResult.success(self)
 
 
 func _exit_tree() -> void:
-	if register_as != &"" and DotRegistry.get_service(register_as) == self:
-		DotRegistry.unregister(register_as)
+	if register_as != &"" and GSRegistry.get_service(register_as) == self:
+		GSRegistry.unregister(register_as)
 
 	# A final "offline" so the listing does not show a dead server as full for
 	# however long the backbone's staleness window is.
@@ -120,21 +120,21 @@ func _exit_tree() -> void:
 
 
 ## Reports offline and waits for it. Call before shutting down.
-func report_offline() -> DotResult:
+func report_offline() -> GSResult:
 	if not _started:
-		return DotResult.success(false)
+		return GSResult.success(false)
 	return await report_stats({"online": false, "curUsers": 0})
 
 
 
 ## Sends live server state as a PATCH: absent fields are left alone. Keys mirror the backbone's `IngestServerStatsInput`.
-func report_stats(stats: Dictionary) -> DotResult:
+func report_stats(stats: Dictionary) -> GSResult:
 	if not _started:
-		return DotResult.fail(DotError.CODE_STATE, "Not started.")
+		return GSResult.fail(GSError.CODE_STATE, "Not started.")
 
 	if not _limiter.allow("backbone"):
-		return DotResult.fail(
-			DotError.CODE_RATE_LIMITED,
+		return GSResult.fail(
+			GSError.CODE_RATE_LIMITED,
 			"Local backbone request limit reached."
 		)
 
@@ -154,7 +154,7 @@ func report_stats(stats: Dictionary) -> DotResult:
 	if not body.has("os"):
 		body["os"] = _os_tag()
 	if not body.has("dedicated"):
-		body["dedicated"] = DotPlatform.is_headless()
+		body["dedicated"] = GSPlatform.is_headless()
 
 	var res := await _signed_post(config.server_stats_endpoint(), body)
 
@@ -169,13 +169,13 @@ func report_stats(stats: Dictionary) -> DotResult:
 func report_users(
 	users: Array,
 	set_count: bool = true
-) -> DotResult:
+) -> GSResult:
 	if not _started:
-		return DotResult.fail(DotError.CODE_STATE, "Not started.")
+		return GSResult.fail(GSError.CODE_STATE, "Not started.")
 
 	if not _limiter.allow("backbone"):
-		return DotResult.fail(
-			DotError.CODE_RATE_LIMITED,
+		return GSResult.fail(
+			GSError.CODE_RATE_LIMITED,
 			"Local backbone request limit reached."
 		)
 
@@ -208,7 +208,7 @@ func report_users(
 	# list did not fit — exactly the case the backbone's own docs warn about.
 	var truncated := users.size() > cleaned.size()
 	if truncated:
-		DotLog.warn(
+		GSLog.warn(
 			CHANNEL,
 			"roster truncated for reporting",
 			{"had": users.size(), "sent": cleaned.size()}
@@ -231,9 +231,9 @@ func lookup_user(
 	party_id: String,
 	name: String,
 	steam_id: String = ""
-) -> DotResult:
+) -> GSResult:
 	if not _started:
-		return DotResult.fail(DotError.CODE_STATE, "Not started.")
+		return GSResult.fail(GSError.CODE_STATE, "Not started.")
 
 	var query := "partyId=%s&name=%s" % [
 		party_id.uri_encode(), name.uri_encode()
@@ -242,36 +242,36 @@ func lookup_user(
 		query += "&steamId=%s" % steam_id.uri_encode()
 
 	var url := config.integration_endpoint("user/lookup") + "?" + query
-	var send := func() -> DotResult:
+	var send := func() -> GSResult:
 		return await _http.get_json(url, _headers())
 	return await _signed(send, "user/lookup")
 
 
 ## POSTs to an arbitrary integration endpoint, with stamping and headers applied (the party endpoints, say).
-func post_integration(path: String, body: Dictionary) -> DotResult:
+func post_integration(path: String, body: Dictionary) -> GSResult:
 	if not _started:
-		return DotResult.fail(DotError.CODE_STATE, "Not started.")
+		return GSResult.fail(GSError.CODE_STATE, "Not started.")
 
 	if not _limiter.allow("backbone"):
-		return DotResult.fail(
-			DotError.CODE_RATE_LIMITED, "Local backbone request limit reached."
+		return GSResult.fail(
+			GSError.CODE_RATE_LIMITED, "Local backbone request limit reached."
 		)
 
 	return await _signed_post(config.integration_endpoint(path), body)
 
 
 ## GETs an arbitrary integration endpoint; [code]ts[/code] goes in [param query] and the nonce in the header, as a GET has no body.
-func get_integration(path: String, query: Dictionary = {}) -> DotResult:
+func get_integration(path: String, query: Dictionary = {}) -> GSResult:
 	if not _started:
-		return DotResult.fail(DotError.CODE_STATE, "Not started.")
+		return GSResult.fail(GSError.CODE_STATE, "Not started.")
 
 	if not _limiter.allow("backbone"):
-		return DotResult.fail(
-			DotError.CODE_RATE_LIMITED, "Local backbone request limit reached."
+		return GSResult.fail(
+			GSError.CODE_RATE_LIMITED, "Local backbone request limit reached."
 		)
 
 	var endpoint := config.integration_endpoint(path)
-	var send := func() -> DotResult:
+	var send := func() -> GSResult:
 		var params := query.duplicate()
 		params["ts"] = int(Time.get_unix_time_from_system())
 		return await _http.get_json(endpoint + "?" + encode_query(params), _headers())
@@ -288,8 +288,8 @@ static func encode_query(params: Dictionary) -> String:
 
 
 ## POSTs [param body] stamped afresh on every attempt; [param body] itself is not changed.
-func _signed_post(url: String, body: Dictionary) -> DotResult:
-	var send := func() -> DotResult:
+func _signed_post(url: String, body: Dictionary) -> GSResult:
+	var send := func() -> GSResult:
 		var payload := body.duplicate()
 		_stamp(payload)
 		return await _http.post_json(url, payload, _headers())
@@ -302,9 +302,9 @@ func _signed_post(url: String, body: Dictionary) -> DotResult:
 ## A failure after retries keeps the FIRST failure in its detail and context
 ## ([code]first_http[/code], [code]first_error[/code], [code]attempts[/code]): the first is
 ## usually the real fault, and a later one is often only its echo.
-func _signed(send: Callable, what: String) -> DotResult:
-	var first: DotResult = null
-	var res: DotResult = null
+func _signed(send: Callable, what: String) -> GSResult:
+	var first: GSResult = null
+	var res: GSResult = null
 	var attempt := 0
 
 	while true:
@@ -321,7 +321,7 @@ func _signed(send: Callable, what: String) -> DotResult:
 			break
 
 		var delay := _http._backoff_delay(attempt, res.error)
-		DotLog.debug(CHANNEL, "retrying with a new nonce", {
+		GSLog.debug(CHANNEL, "retrying with a new nonce", {
 			"what": what.get_slice("?", 0), "attempt": attempt, "in": "%.2fs" % delay,
 			"http": res.error.http_status, "why": res.code(),
 		})
@@ -339,7 +339,7 @@ func _signed(send: Callable, what: String) -> DotResult:
 
 
 ## Transport errors, 5xx and 429 are retried; any other 4xx is a refusal, and resending it only spends the rate limit.
-static func _worth_retry(res: DotResult) -> bool:
+static func _worth_retry(res: GSResult) -> bool:
 	if not res.is_retryable():
 		return false
 	var status := res.error.http_status
@@ -349,7 +349,7 @@ static func _worth_retry(res: DotResult) -> bool:
 ## Adds the replay-protection fields; [code]ts[/code] is Unix [b]seconds[/b], and the backbone refuses milliseconds loudly.
 func _stamp(body: Dictionary) -> void:
 	body["ts"] = int(Time.get_unix_time_from_system())
-	body["nonce"] = DotHash.random_hex(16)
+	body["nonce"] = GSHash.random_hex(16)
 
 
 func _headers() -> Dictionary:
@@ -357,16 +357,16 @@ func _headers() -> Dictionary:
 		"Authorization": "Bearer %s" % config.integration_token,
 		# The backbone also reads the nonce from a header, which covers GET
 		# requests that have no body to put it in.
-		"x-tmc-nonce": DotHash.random_hex(16),
+		"x-tmc-nonce": GSHash.random_hex(16),
 	}
 
 
 ## The platform tag the backbone's `ServerOsVals` enum expects.
 func _os_tag() -> String:
-	match DotPlatform.kind():
-		DotPlatform.Kind.WINDOWS: return "WINDOWS"
-		DotPlatform.Kind.LINUX: return "LINUX"
-		DotPlatform.Kind.MACOS: return "MACOS"
+	match GSPlatform.kind():
+		GSPlatform.Kind.WINDOWS: return "WINDOWS"
+		GSPlatform.Kind.LINUX: return "LINUX"
+		GSPlatform.Kind.MACOS: return "MACOS"
 		_: return "OTHER"
 
 
@@ -382,11 +382,11 @@ func _on_report_due() -> void:
 			await report_users(roster as Array)
 
 
-func _note(res: DotResult, kind: String) -> void:
+func _note(res: GSResult, kind: String) -> void:
 	if res.ok:
 		_report_count += 1
 		_last_error = ""
-		DotLog.debug(CHANNEL, "reported", {"kind": kind})
+		GSLog.debug(CHANNEL, "reported", {"kind": kind})
 		return
 
 	_last_error = res.error.message
@@ -394,7 +394,7 @@ func _note(res: DotResult, kind: String) -> void:
 	# A 403 means the integration lacks the scope, and that will not fix itself —
 	# say which scope so the operator can tick the box.
 	if res.error.http_status == 403:
-		DotLog.warn(
+		GSLog.warn(
 			CHANNEL,
 			"the backbone refused a report; the integration may lack a scope",
 			{
@@ -403,7 +403,7 @@ func _note(res: DotResult, kind: String) -> void:
 			}
 		)
 	else:
-		DotLog.warn(
+		GSLog.warn(
 			CHANNEL,
 			"report failed",
 			{"kind": kind, "why": res.error.message}

@@ -6,7 +6,7 @@ extends "res://examples/auth_demo_trust.gd"
 func _test_pkce() -> void:
 	_section("[b]PKCE[/b]")
 
-	var pair := DotPkce.generate()
+	var pair := GSPkce.generate()
 	var verifier := str(pair["verifier"])
 	var challenge := str(pair["challenge"])
 
@@ -22,15 +22,15 @@ func _test_pkce() -> void:
 		null
 	)
 	_check("challenge differs from verifier", challenge != verifier, null)
-	_check("challenge verifies", DotPkce.verify(verifier, challenge), null)
+	_check("challenge verifies", GSPkce.verify(verifier, challenge), null)
 	_check(
 		"wrong verifier refused",
-		not DotPkce.verify(verifier + "x", challenge),
+		not GSPkce.verify(verifier + "x", challenge),
 		null
 	)
 	_check(
 		"derivation is deterministic",
-		DotPkce.challenge_for(verifier) == challenge,
+		GSPkce.challenge_for(verifier) == challenge,
 		null
 	)
 
@@ -45,12 +45,12 @@ func _test_local_accounts() -> void:
 	var path := "user://dot_auth_test_accounts.json"
 	DirAccess.remove_absolute(path)
 
-	var config := DotAuthConfig.new()
-	config.strategy = DotAuthConfig.Strategy.LOCAL
+	var config := GSAuthConfig.new()
+	config.strategy = GSAuthConfig.Strategy.LOCAL
 	config.local_accounts_path = path
 	config.allow_guests = false
 
-	var server := DotAuthServer.new()
+	var server := GSAuthServer.new()
 	server.name = "LocalAuthServer"
 	server.config = config
 	server.config_file = ""
@@ -68,7 +68,7 @@ func _test_local_accounts() -> void:
 	)
 	_check("correct password accepted", ok.ok, ok)
 	if ok.ok:
-		var id: DotAuthIdentity = ok.value
+		var id: GSAuthIdentity = ok.value
 		_check("uid namespaced", id.uid == "local:grace", null)
 		_check("role carried", id.role == "ADMIN", null)
 
@@ -77,7 +77,7 @@ func _test_local_accounts() -> void:
 	)
 	_check(
 		"wrong password refused",
-		not bad.ok and bad.code() == DotError.CODE_AUTH,
+		not bad.ok and bad.code() == GSError.CODE_AUTH,
 		bad
 	)
 
@@ -94,7 +94,7 @@ func _test_local_accounts() -> void:
 	)
 
 	# The stored record must not contain the password.
-	var stored := DotPaths.read_text(path)
+	var stored := GSPaths.read_text(path)
 	_check(
 		"password not stored in plaintext",
 		stored.ok and not str(stored.value).contains("correct-horse-battery"),
@@ -114,21 +114,21 @@ func _test_refusals_are_logged() -> void:
 
 	var records: Array[Dictionary] = []
 	var capture := func(rec: Dictionary) -> void:
-		if str(rec.get("channel", "")) == DotAuthServer.CHANNEL:
+		if str(rec.get("channel", "")) == GSAuthServer.CHANNEL:
 			records.append(rec)
-	var printing := DotLog.print_to_stdout
-	DotLog.print_to_stdout = false
-	DotLog.set_channel_level(DotAuthServer.CHANNEL, DotLog.Level.DEBUG)
-	DotLog.signals().record.connect(capture)
+	var printing := GSLog.print_to_stdout
+	GSLog.print_to_stdout = false
+	GSLog.set_channel_level(GSAuthServer.CHANNEL, GSLog.Level.DEBUG)
+	GSLog.signals().record.connect(capture)
 
 	var path := "user://dot_auth_test_refusals.json"
 	DirAccess.remove_absolute(path)
-	var config := DotAuthConfig.new()
-	config.strategy = DotAuthConfig.Strategy.LOCAL
+	var config := GSAuthConfig.new()
+	config.strategy = GSAuthConfig.Strategy.LOCAL
 	config.local_accounts_path = path
 	config.allow_guests = false
 	config.auth_attempts_per_minute = 3
-	var server := DotAuthServer.new()
+	var server := GSAuthServer.new()
 	server.config = config
 	server.config_file = ""
 	server.register_service = false
@@ -142,8 +142,8 @@ func _test_refusals_are_logged() -> void:
 	var fields: Dictionary = refusal.get("fields", {})
 	_check(
 		"a wrong password is INFO",
-		int(refusal.get("level", -1)) == DotLog.Level.INFO
-			and str(fields.get("code", "")) == DotError.CODE_AUTH,
+		int(refusal.get("level", -1)) == GSLog.Level.INFO
+			and str(fields.get("code", "")) == GSError.CODE_AUTH,
 		null
 	)
 	_check(
@@ -164,9 +164,9 @@ func _test_refusals_are_logged() -> void:
 	await server.authenticate({"username": "grace", "password": "no"}, "10.0.0.2")
 	_check(
 		"the limiter's refusal is DEBUG",
-		records.size() == 1 and int(records[0].get("level", -1)) == DotLog.Level.DEBUG
+		records.size() == 1 and int(records[0].get("level", -1)) == GSLog.Level.DEBUG
 			and str((records[0].get("fields", {}) as Dictionary).get("code", ""))
-				== DotError.CODE_RATE_LIMITED,
+				== GSError.CODE_RATE_LIMITED,
 		null
 	)
 
@@ -177,22 +177,22 @@ func _test_refusals_are_logged() -> void:
 
 	await _refusals_verifier_down(records)
 
-	DotLog.signals().record.disconnect(capture)
-	DotLog.clear_channel_level(DotAuthServer.CHANNEL)
-	DotLog.print_to_stdout = printing
+	GSLog.signals().record.disconnect(capture)
+	GSLog.clear_channel_level(GSAuthServer.CHANNEL)
+	GSLog.print_to_stdout = printing
 	_line("")
 	_done()
 
 
 
-func _refusals_run_escalates(server: DotAuthServer, records: Array[Dictionary]) -> void:
+func _refusals_run_escalates(server: GSAuthServer, records: Array[Dictionary]) -> void:
 	# A run with nobody getting in is escalated once, and a real sign-in ends the run.
 	var warns := func() -> int:
 		return records.filter(func(r: Dictionary) -> bool:
-			return int(r.get("level", -1)) == DotLog.Level.WARN).size()
+			return int(r.get("level", -1)) == GSLog.Level.WARN).size()
 	await server.authenticate({"username": "grace", "password": "correct-horse-battery"}, "10.0.1.0")
 	records.clear()
-	for i in range(DotAuthServer.REFUSAL_RUN_WARN - 1):
+	for i in range(GSAuthServer.REFUSAL_RUN_WARN - 1):
 		await server.authenticate({"username": "grace", "password": "no"}, "10.0.1.%d" % (i + 1))
 	_check("a few refusals are not a WARN", warns.call() == 0, null)
 	await server.authenticate({"username": "grace", "password": "no"}, "10.0.2.0")
@@ -204,25 +204,25 @@ func _refusals_run_escalates(server: DotAuthServer, records: Array[Dictionary]) 
 
 func _refusals_verifier_down(records: Array[Dictionary]) -> void:
 	# A verifier that cannot be reached: WARN once, however many joins it refuses.
-	var down := DotAuthConfig.new()
-	down.strategy = DotAuthConfig.Strategy.INTROSPECT
+	var down := GSAuthConfig.new()
+	down.strategy = GSAuthConfig.Strategy.INTROSPECT
 	down.backbone_url = "http://127.0.0.1:9"
 	down.allow_guests = false
-	var remote := DotAuthServer.new()
+	var remote := GSAuthServer.new()
 	remote.config = down
 	remote.config_file = ""
 	remote.register_service = false
 	add_child(remote)
 	remote.start()
 	records.clear()
-	var first: DotResult = await remote.authenticate({"access_token": "t1"}, "10.0.4.1")
+	var first: GSResult = await remote.authenticate({"access_token": "t1"}, "10.0.4.1")
 	await remote.authenticate({"access_token": "t2"}, "10.0.4.2")
 	var outage := records.filter(func(r: Dictionary) -> bool:
 		return str(r.get("message", "")) == "sign-ins cannot be verified right now")
 	_check(
 		"an unreachable verifier is one WARN",
 		not first.ok and outage.size() == 1
-			and int(outage[0].get("level", -1)) == DotLog.Level.WARN,
+			and int(outage[0].get("level", -1)) == GSLog.Level.WARN,
 		first
 	)
 	remote.queue_free()
@@ -231,7 +231,7 @@ func _refusals_verifier_down(records: Array[Dictionary]) -> void:
 func _test_admin_source() -> void:
 	_section("[b]admin mapping[/b]")
 
-	var source := DotAuthAdminSource.new()
+	var source := GSAuthAdminSource.new()
 	source.group_flags = {
 		"moderators": ["kick", "mute"],
 		"admins": "kick,ban,changemap",
@@ -240,7 +240,7 @@ func _test_admin_source() -> void:
 	source.claim_flags = {"supporter": ["reserved_slot"]}
 	source.authenticated_flags = PackedStringArray(["chat"])
 
-	var moderator := DotAuthIdentity.new()
+	var moderator := GSAuthIdentity.new()
 	moderator.uid = "backbone:1"
 	moderator.provider = "backbone"
 	moderator.display_name = "Mod"
@@ -259,7 +259,7 @@ func _test_admin_source() -> void:
 		_check("immunity from group", int(d["immunity"]) == 20, null)
 
 	# Comma-separated flags in a config string must parse.
-	var admin := DotAuthIdentity.new()
+	var admin := GSAuthIdentity.new()
 	admin.uid = "backbone:2"
 	admin.provider = "backbone"
 	admin.claims = {"groups": ["admins"]}
@@ -272,17 +272,17 @@ func _test_admin_source() -> void:
 
 	# Guests must never receive permissions: the identity is a random per-device
 	# string, so granting anything would grant it to anyone who asks.
-	var guest := DotAuthIdentity.guest("device123")
+	var guest := GSAuthIdentity.guest("device123")
 	var guest_res := source.lookup(guest)
 	_check(
 		"guests get nothing",
-		not guest_res.ok and guest_res.code() == DotError.CODE_FORBIDDEN,
+		not guest_res.ok and guest_res.code() == GSError.CODE_FORBIDDEN,
 		guest_res
 	)
 
 	# A signed-in player in no mapped group still gets the baseline, and nothing
 	# else — in particular not their site role, which is unmapped by default.
-	var plain := DotAuthIdentity.new()
+	var plain := GSAuthIdentity.new()
 	plain.uid = "backbone:3"
 	plain.provider = "backbone"
 	plain.role = "ADMIN"
@@ -306,26 +306,26 @@ func _test_token_store() -> void:
 	DirAccess.remove_absolute(path)
 	DirAccess.remove_absolute(path + ".salt")
 
-	var identity := DotAuthIdentity.new()
+	var identity := GSAuthIdentity.new()
 	identity.uid = "backbone:42"
 	identity.provider = "backbone"
 	identity.display_name = "Linus"
 
-	var store := DotAuthTokenStore.new(path, true)
+	var store := GSAuthTokenStore.new(path, true)
 	var saved := store.set_tokens("tmc_at_abc", "tmc_rt_xyz", 3600, identity)
 	_check("saved", saved.ok, saved)
 
 	# The refresh token must not be recoverable from the file. Compared as raw bytes:
 	# ciphertext is not valid UTF-8, and decoding would spam the log and could hide a
 	# real substring behind a replacement character.
-	var raw := DotPaths.read_bytes(path)
+	var raw := GSPaths.read_bytes(path)
 	_check(
 		"encrypted at rest",
 		raw.ok and _find_bytes(raw.value, "tmc_rt_xyz".to_utf8_buffer()) < 0,
 		null
 	)
 
-	var reopened := DotAuthTokenStore.new(path, true)
+	var reopened := GSAuthTokenStore.new(path, true)
 	var loaded := reopened.load_tokens()
 	_check("reloaded", loaded.ok and bool(loaded.value), loaded)
 	_check(
@@ -353,7 +353,7 @@ func _test_token_store() -> void:
 
 
 ## A custom authentication provider, defined entirely outside GameSpice Auth.
-class DemoProvider extends DotAuthProvider:
+class DemoProvider extends GSAuthProvider:
 	var should_fail := false
 
 	func _provider_name() -> String:
@@ -362,27 +362,27 @@ class DemoProvider extends DotAuthProvider:
 	func _handles(credential: Dictionary) -> bool:
 		return credential.has("demo_token")
 
-	func _authenticate(credential: Dictionary) -> DotResult:
+	func _authenticate(credential: Dictionary) -> GSResult:
 		if should_fail:
-			return DotResult.fail(DotError.CODE_AUTH, "Demo provider refused.")
+			return GSResult.fail(GSError.CODE_AUTH, "Demo provider refused.")
 
-		var identity := DotAuthIdentity.new()
+		var identity := GSAuthIdentity.new()
 		identity.provider = "demo"
 		identity.provider_id = str(credential["demo_token"])
 		identity.uid = "demo:%s" % identity.provider_id
 		identity.display_name = "Demo User"
-		return DotResult.success(identity)
+		return GSResult.success(identity)
 
 
 func _test_providers() -> void:
 	_section("[b]custom auth providers[/b]")
 
-	var config := DotAuthConfig.new()
-	config.strategy = DotAuthConfig.Strategy.LOCAL
+	var config := GSAuthConfig.new()
+	config.strategy = GSAuthConfig.Strategy.LOCAL
 	config.local_accounts_path = "user://dot_auth_provider_test.json"
 	config.allow_guests = false
 
-	var server := DotAuthServer.new()
+	var server := GSAuthServer.new()
 	server.name = "ProviderAuthServer"
 	server.config = config
 	server.config_file = ""
@@ -397,7 +397,7 @@ func _test_providers() -> void:
 	var ok := await server.authenticate({"demo_token": "abc123"}, "peer1")
 	_check("provider authenticated", ok.ok, ok)
 	if ok.ok:
-		var id: DotAuthIdentity = ok.value
+		var id: GSAuthIdentity = ok.value
 		_check("provider uid namespaced", id.uid == "demo:abc123", null)
 		_check("provider name carried", id.provider == "demo", null)
 
@@ -407,7 +407,7 @@ func _test_providers() -> void:
 	)
 	_check(
 		"unclaimed credential falls through",
-		not fell_through.ok and fell_through.code() == DotError.CODE_AUTH,
+		not fell_through.ok and fell_through.code() == GSError.CODE_AUTH,
 		null
 	)
 

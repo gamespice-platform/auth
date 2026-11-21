@@ -1,15 +1,15 @@
 @tool
-class_name DotAuthIssuer
+class_name GSAuthIssuer
 extends Node
 
 ## Mints connect tickets: the publisher runs one, game servers do not.
 ##
-## A client sends its backbone access token here (first-party trust) and gets a [DotAuthTicket] scoped to one server. It needs the private key and backbone access; operators get only the public key. [member listen_port] starts a minimal HTTP/1.1 listener for one JSON POST (no TLS, keep-alive or chunking), so put it behind a reverse proxy; at 0 call [method issue_for_token] directly. Sessions and usage: docs/rationale.md.
+## A client sends its backbone access token here (first-party trust) and gets a [GSAuthTicket] scoped to one server. It needs the private key and backbone access; operators get only the public key. [member listen_port] starts a minimal HTTP/1.1 listener for one JSON POST (no TLS, keep-alive or chunking), so put it behind a reverse proxy; at 0 call [method issue_for_token] directly. Sessions and usage: docs/rationale.md.
 
 const CHANNEL := "auth.issuer"
 
 ## Emitted for every ticket minted, for audit logging.
-signal ticket_issued(identity: DotAuthIdentity, server_id: String)
+signal ticket_issued(identity: GSAuthIdentity, server_id: String)
 
 ## Emitted when a request is refused, so abuse is visible.
 signal request_refused(reason: String, address: String)
@@ -19,11 +19,11 @@ signal session_conflict(uid: String, held_server: String, wanted_server: String)
 
 @export_group("Configuration")
 
-@export var config: DotAuthConfig = null
+@export var config: GSAuthConfig = null
 
 @export var config_file: String = "user://dot_auth_issuer.json"
 
-## Read the signing key from this file instead of [member DotAuthConfig.issuer_private_key], so it never sits in a config the process might dump to a log.
+## Read the signing key from this file instead of [member GSAuthConfig.issuer_private_key], so it never sits in a config the process might dump to a log.
 @export_global_file("*.key", "*.pem") var private_key_file: String = ""
 
 @export_group("Listener")
@@ -55,10 +55,10 @@ signal session_conflict(uid: String, held_server: String, wanted_server: String)
 ## Connections held at once; further callers get 503. Refusing beats queueing, as every held connection is polled every frame.
 @export_range(1, 4096, 1) var max_connections: int = 64
 
-var _http: DotHttp = null
+var _http: GSHttp = null
 var _tcp: TCPServer = null
 var _private_key: String = ""
-var _limiter: DotRateLimiter = null
+var _limiter: GSRateLimiter = null
 var _connections: Array[Dictionary] = []
 var _issued_count: int = 0
 
@@ -79,13 +79,13 @@ func _ready() -> void:
 
 	var started := start()
 	if not started.ok:
-		DotLog.result(CHANNEL, "issuer start", started)
+		GSLog.result(CHANNEL, "issuer start", started)
 		set_process(false)
 
 
-func start() -> DotResult:
+func start() -> GSResult:
 	if config == null:
-		config = DotAuthConfig.new()
+		config = GSAuthConfig.new()
 
 	if config_file != "":
 		config.apply_json_file(config_file)
@@ -96,12 +96,12 @@ func start() -> DotResult:
 	if not key.ok:
 		return key
 
-	_http = DotHttp.new()
+	_http = GSHttp.new()
 	_http.name = "IssuerHttp"
 	_http.timeout_sec = 15.0
 	add_child(_http)
 
-	_limiter = DotRateLimiter.new(
+	_limiter = GSRateLimiter.new(
 		float(tickets_per_minute) / 60.0, float(tickets_per_minute)
 	)
 
@@ -113,7 +113,7 @@ func start() -> DotResult:
 	if config.single_session and _server_keys.is_empty():
 		# Legal, and worth a line: the option works, but every hold is the lease
 		# long and nothing ever ends one early.
-		DotLog.warn(
+		GSLog.warn(
 			CHANNEL,
 			"single_session is on but no server can report its roster — players "
 			+ "are held for the lease after every ticket, whether or not they "
@@ -126,7 +126,7 @@ func start() -> DotResult:
 		if not listen.ok:
 			return listen
 
-	DotLog.info(
+	GSLog.info(
 		CHANNEL,
 		"issuer ready",
 		{
@@ -139,17 +139,17 @@ func start() -> DotResult:
 		}
 	)
 
-	return DotResult.success(self)
+	return GSResult.success(self)
 
 
 ## Loads and probes the signing key into [member _private_key].
-func _load_signing_key() -> DotResult:
+func _load_signing_key() -> GSResult:
 	# Read the key from a file when told to. Checked before the inline config
 	# value so a deployment can leave the config in version control.
 	if private_key_file != "":
 		if not FileAccess.file_exists(private_key_file):
-			return DotResult.fail(
-				DotError.CODE_IO,
+			return GSResult.fail(
+				GSError.CODE_IO,
 				"The signing key file does not exist.",
 				private_key_file
 			)
@@ -158,32 +158,32 @@ func _load_signing_key() -> DotResult:
 		_private_key = config.issuer_private_key
 
 	if _private_key.strip_edges() == "":
-		return DotResult.fail(
-			DotError.CODE_INVALID,
+		return GSResult.fail(
+			GSError.CODE_INVALID,
 			"The issuer has no signing key.",
-			"set private_key_file, or DotAuthConfig.issuer_private_key"
+			"set private_key_file, or GSAuthConfig.issuer_private_key"
 		)
 
 	# Prove the key works now rather than on the first player's join.
-	var probe := DotJwt.encode_rs256({"probe": 1}, _private_key)
+	var probe := GSJwt.encode_rs256({"probe": 1}, _private_key)
 	if not probe.ok:
 		return probe.wrap("The signing key is unusable.")
-	return DotResult.success(true)
+	return GSResult.success(true)
 
 
 ## Validates a backbone access token and mints a ticket for [param server_id], without HTTP of our own (embed the issuer by calling this).
 func issue_for_token(
 	access_token: String,
 	server_id: String
-) -> DotResult:
+) -> GSResult:
 	if server_id.strip_edges() == "":
-		return DotResult.fail(
-			DotError.CODE_INVALID, "No server id."
+		return GSResult.fail(
+			GSError.CODE_INVALID, "No server id."
 		)
 
 	if not allowed_server_ids.is_empty() and not allowed_server_ids.has(server_id):
-		return DotResult.fail(
-			DotError.CODE_FORBIDDEN,
+		return GSResult.fail(
+			GSError.CODE_FORBIDDEN,
 			"This issuer does not serve that server.",
 			server_id
 		)
@@ -197,24 +197,24 @@ func issue_for_token(
 
 ## Mints a ticket for a player whose identity is already established; public so a service that knows who is asking can skip the backbone round trip, and so session rules are testable without one.
 func issue_for_identity(
-	identity: DotAuthIdentity,
+	identity: GSAuthIdentity,
 	server_id: String
-) -> DotResult:
+) -> GSResult:
 	if identity == null or not identity.is_valid():
-		return DotResult.fail(
-			DotError.CODE_INVALID, "Cannot issue a ticket for an invalid identity."
+		return GSResult.fail(
+			GSError.CODE_INVALID, "Cannot issue a ticket for an invalid identity."
 		)
 
 	if server_id.strip_edges() == "":
-		return DotResult.fail(
-			DotError.CODE_INVALID, "No server id."
+		return GSResult.fail(
+			GSError.CODE_INVALID, "No server id."
 		)
 
 	if config.single_session:
 		var held := session_of(identity.uid)
 		if held != "" and held != server_id:
 			_conflict_count += 1
-			DotLog.info(
+			GSLog.info(
 				CHANNEL,
 				"ticket refused: the player is on another server",
 				{"user": identity.label(), "on": held, "wanted": server_id}
@@ -222,14 +222,14 @@ func issue_for_identity(
 			session_conflict.emit(identity.uid, held, server_id)
 			# The server is named so the player knows what to leave. It is
 			# their own whereabouts; nothing about anybody else is disclosed.
-			return DotResult.fail(
-				DotError.CODE_FORBIDDEN,
+			return GSResult.fail(
+				GSError.CODE_FORBIDDEN,
 				"You are already connected to %s. Leave it before joining "
 				% held + "another server.",
 				held
 			)
 
-	var ticket := DotAuthTicket.issue(
+	var ticket := GSAuthTicket.issue(
 		identity,
 		server_id,
 		_private_key,
@@ -247,7 +247,7 @@ func issue_for_identity(
 	# what is known rather than from nothing, and so describe() can answer.
 	_hold_session(identity.uid, server_id, false)
 
-	DotLog.info(
+	GSLog.info(
 		CHANNEL,
 		"ticket issued",
 		{"user": identity.label(), "server": server_id}
@@ -255,7 +255,7 @@ func issue_for_identity(
 
 	ticket_issued.emit(identity, server_id)
 
-	return DotResult.success({
+	return GSResult.success({
 		"ticket": ticket.value,
 		"expiresIn": config.ticket_ttl_sec,
 		"user": identity.to_dict(),
@@ -263,17 +263,17 @@ func issue_for_identity(
 
 
 ## Turns a backbone access token into the identity behind it, or a refusal. Rate-limited per token on a hashed key, so one compromised account cannot exhaust the budget and the token is not held in a dictionary.
-func _resolve_token(access_token: String) -> DotResult:
+func _resolve_token(access_token: String) -> GSResult:
 	if access_token.strip_edges() == "":
-		return DotResult.fail(DotError.CODE_AUTH, "No access token.")
+		return GSResult.fail(GSError.CODE_AUTH, "No access token.")
 
-	var key := DotHash.sha256_text(access_token).substr(0, 32)
+	var key := GSHash.sha256_text(access_token).substr(0, 32)
 	if not _limiter.allow(key):
-		var err := DotError.make(
-			DotError.CODE_RATE_LIMITED, "Too many ticket requests."
+		var err := GSError.make(
+			GSError.CODE_RATE_LIMITED, "Too many ticket requests."
 		)
 		err.retry_after = _limiter.retry_after(key)
-		return DotResult.failure(err)
+		return GSResult.failure(err)
 
 	var res := await _http.get_json(
 		config.me_endpoint(), {"Authorization": "Bearer %s" % access_token}
@@ -283,15 +283,15 @@ func _resolve_token(access_token: String) -> DotResult:
 		# 401 from the backbone means the player's token is bad, which is a 401
 		# from us too — not a 500. Anything else is our problem, not theirs.
 		if res.error != null and res.error.http_status == 401:
-			return DotResult.fail(
-				DotError.CODE_AUTH, "That sign-in is no longer valid."
+			return GSResult.fail(
+				GSError.CODE_AUTH, "That sign-in is no longer valid."
 			)
 		return res.wrap("Could not check the sign-in with the backbone.")
 
 	var payload: Variant = res.value
 	if not (payload is Dictionary):
-		return DotResult.fail(
-			DotError.CODE_PARSE, "The backbone sent an unexpected response."
+		return GSResult.fail(
+			GSError.CODE_PARSE, "The backbone sent an unexpected response."
 		)
 
 	var d := payload as Dictionary
@@ -299,28 +299,28 @@ func _resolve_token(access_token: String) -> DotResult:
 	if user is Dictionary and (user as Dictionary).has("user"):
 		user = (user as Dictionary)["user"]
 
-	return DotAuthIdentity.from_backbone_user(
+	return GSAuthIdentity.from_backbone_user(
 		user if user is Dictionary else {}
 	)
 
 
 
 ## Registers a server that may report its roster, and the key it presents.
-func add_server_key(server_id: String, key: String) -> DotResult:
+func add_server_key(server_id: String, key: String) -> GSResult:
 	if server_id.strip_edges() == "" or key.strip_edges() == "":
-		return DotResult.fail(
-			DotError.CODE_INVALID, "A server key needs a server id and a key."
+		return GSResult.fail(
+			GSError.CODE_INVALID, "A server key needs a server id and a key."
 		)
 	if key.length() < 16:
 		# A key an operator typed from memory is a key somebody can guess, and
 		# guessing one lets them report any player as being anywhere.
-		return DotResult.fail(
-			DotError.CODE_INVALID,
+		return GSResult.fail(
+			GSError.CODE_INVALID,
 			"A server key must be at least 16 characters.",
 			server_id
 		)
 	_server_keys[server_id] = key
-	return DotResult.success(server_id)
+	return GSResult.success(server_id)
 
 
 func remove_server_key(server_id: String) -> void:
@@ -334,7 +334,7 @@ func authorize_server(server_id: String, key: String) -> bool:
 	# Compared against something of the right shape even when unknown, so the
 	# time taken does not say whether the id exists.
 	var compare_to := expected if known else key
-	var same := DotHash.constant_time_equal(
+	var same := GSHash.constant_time_equal(
 		key.to_utf8_buffer(), compare_to.to_utf8_buffer()
 	)
 	return known and same and key != ""
@@ -361,9 +361,9 @@ func sessions() -> Dictionary:
 ## Takes a server's word for who is on it.
 ##
 ## [param uids] is the whole roster: those listed are on [param server_id] now, and every [i]confirmed[/i] session there not listed has ended. An unconfirmed session is left alone, or a player could fetch tickets for two servers before the first roster mentions them. A listed player recorded elsewhere is moved. Reasoning: docs/rationale.md.
-func report_sessions(server_id: String, uids: PackedStringArray) -> DotResult:
+func report_sessions(server_id: String, uids: PackedStringArray) -> GSResult:
 	if server_id.strip_edges() == "":
-		return DotResult.fail(DotError.CODE_INVALID, "No server id.")
+		return GSResult.fail(GSError.CODE_INVALID, "No server id.")
 
 	_sweep_sessions()
 
@@ -385,13 +385,13 @@ func report_sessions(server_id: String, uids: PackedStringArray) -> DotResult:
 	for uid in ended:
 		_sessions.erase(uid)
 
-	DotLog.debug(
+	GSLog.debug(
 		CHANNEL,
 		"roster reported",
 		{"server": server_id, "players": listed.size(), "ended": ended.size()}
 	)
 
-	return DotResult.success({"held": listed.size(), "ended": ended.size()})
+	return GSResult.success({"held": listed.size(), "ended": ended.size()})
 
 
 ## Ends [param uid]'s session, wherever it is; true if there was one. If they are still playing, the server's next report puts them back.
@@ -432,22 +432,22 @@ func _sweep_sessions() -> void:
 		_sessions.erase(uid)
 
 
-func _load_server_keys() -> DotResult:
+func _load_server_keys() -> GSResult:
 	if not FileAccess.file_exists(session_keys_file):
-		return DotResult.fail(
-			DotError.CODE_IO,
+		return GSResult.fail(
+			GSError.CODE_IO,
 			"The session keys file does not exist.",
 			session_keys_file
 		)
 
-	var read := DotPaths.read_json(session_keys_file)
+	var read := GSPaths.read_json(session_keys_file)
 	if not read.ok:
 		return read.wrap("Could not read the session keys file.")
 
 	var data: Variant = read.value
 	if not (data is Dictionary):
-		return DotResult.fail(
-			DotError.CODE_PARSE,
+		return GSResult.fail(
+			GSError.CODE_PARSE,
 			"The session keys file must be a JSON object of server id -> key.",
 			session_keys_file
 		)
@@ -457,28 +457,28 @@ func _load_server_keys() -> DotResult:
 		if not added.ok:
 			return added.wrap("The session keys file has a bad entry.")
 
-	return DotResult.success(_server_keys.size())
+	return GSResult.success(_server_keys.size())
 
 
 
-func _start_listener() -> DotResult:
-	if not DotPlatform.can_listen():
-		return DotResult.fail(
-			DotError.CODE_UNSUPPORTED,
+func _start_listener() -> GSResult:
+	if not GSPlatform.can_listen():
+		return GSResult.fail(
+			GSError.CODE_UNSUPPORTED,
 			"This platform cannot listen for connections."
 		)
 
 	_tcp = TCPServer.new()
 	var err := _tcp.listen(listen_port, bind_address)
 	if err != OK:
-		return DotResult.failure(
-			DotError.from_engine(
+		return GSResult.failure(
+			GSError.from_engine(
 				err, "listening on %s:%d" % [bind_address, listen_port]
 			)
 		)
 
 	if bind_address != "127.0.0.1" and bind_address != "localhost":
-		DotLog.warn(
+		GSLog.warn(
 			CHANNEL,
 			"the issuer is listening on a public interface without TLS — put it "
 			+ "behind a reverse proxy",
@@ -486,7 +486,7 @@ func _start_listener() -> DotResult:
 		)
 
 	set_process(true)
-	return DotResult.success(true)
+	return GSResult.success(true)
 
 
 func _process(_delta: float) -> void:
@@ -644,12 +644,12 @@ func _dispatch(
 
 	var request := parsed as Dictionary
 	var server_id := str(request.get("serverId", ""))
-	var res: DotResult = null
+	var res: GSResult = null
 
 	# This issuer is id-only; the by-address shape is the backbone's. Say so, not "no server".
 	if path.begins_with("/ticket") and server_id == "" and (request.has("address") or request.has("nonce")):
 		request_refused.emit("address request", address)
-		_respond(peer, 400, {"error": "This issuer takes {serverId} only, not {address, nonce}.", "code": DotError.CODE_INVALID})
+		_respond(peer, 400, {"error": "This issuer takes {serverId} only, not {address, nonce}.", "code": GSError.CODE_INVALID})
 		return
 
 	if path.begins_with("/ticket"):
@@ -680,32 +680,32 @@ func _report_for_server(
 	server_id: String,
 	request: Dictionary,
 	address: String
-) -> DotResult:
+) -> GSResult:
 	if server_id.strip_edges() == "":
-		return DotResult.fail(DotError.CODE_INVALID, "No server id.")
+		return GSResult.fail(GSError.CODE_INVALID, "No server id.")
 
 	if not _limiter.allow("server:" + server_id):
-		var err := DotError.make(
-			DotError.CODE_RATE_LIMITED, "Too many roster reports."
+		var err := GSError.make(
+			GSError.CODE_RATE_LIMITED, "Too many roster reports."
 		)
 		err.retry_after = _limiter.retry_after("server:" + server_id)
-		return DotResult.failure(err)
+		return GSResult.failure(err)
 
 	# Key first, before the roster is read: an unauthenticated report must not confirm or free a session.
 	if not authorize_server(server_id, key):
-		DotLog.warn(
+		GSLog.warn(
 			CHANNEL,
 			"a roster report presented a key this issuer does not hold",
 			{"server": server_id, "from": address}
 		)
-		return DotResult.fail(
-			DotError.CODE_AUTH, "That server key is not recognised."
+		return GSResult.fail(
+			GSError.CODE_AUTH, "That server key is not recognised."
 		)
 
 	var users: Variant = request.get("users", [])
 	if not (users is Array):
-		return DotResult.fail(
-			DotError.CODE_INVALID, "'users' must be a list of uids."
+		return GSResult.fail(
+			GSError.CODE_INVALID, "'users' must be a list of uids."
 		)
 
 	var uids := PackedStringArray()
@@ -716,21 +716,21 @@ func _report_for_server(
 
 
 ## [code]POST /session/release[/code]: a player ending their own session, resolved through the backbone so a token can only end its own account's.
-func _release_for_token(access_token: String) -> DotResult:
+func _release_for_token(access_token: String) -> GSResult:
 	var resolved := await _resolve_token(access_token)
 	if not resolved.ok:
 		return resolved
 
-	var identity: DotAuthIdentity = resolved.value
+	var identity: GSAuthIdentity = resolved.value
 	var had := release_session(identity.uid)
 
-	DotLog.info(
+	GSLog.info(
 		CHANNEL,
 		"session released by the player",
 		{"user": identity.label(), "had_one": had}
 	)
 
-	return DotResult.success({"released": had})
+	return GSResult.success({"released": had})
 
 
 ## Index of the CRLFCRLF ending the headers, or -1 while they are still arriving. Scanned over bytes: a body split mid-UTF-8 decodes to a replacement character and shifts every later offset.
@@ -751,12 +751,12 @@ static func _header(lines: PackedStringArray, name: String) -> String:
 	return ""
 
 
-func _status_for(error: DotError) -> int:
+func _status_for(error: GSError) -> int:
 	match error.code:
-		DotError.CODE_AUTH: return 401
-		DotError.CODE_FORBIDDEN: return 403
-		DotError.CODE_RATE_LIMITED: return 429
-		DotError.CODE_INVALID: return 400
+		GSError.CODE_AUTH: return 401
+		GSError.CODE_FORBIDDEN: return 403
+		GSError.CODE_RATE_LIMITED: return 429
+		GSError.CODE_INVALID: return 400
 		_: return 502
 
 

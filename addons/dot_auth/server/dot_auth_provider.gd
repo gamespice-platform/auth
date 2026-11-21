@@ -1,10 +1,10 @@
 @tool
-class_name DotAuthProvider
+class_name GSAuthProvider
 extends Resource
 
-## A pluggable way to authenticate a player. Subclass it and register it with [method DotAuthServer.add_provider].
+## A pluggable way to authenticate a player. Subclass it and register it with [method GSAuthServer.add_provider].
 ##
-## A provider is consulted before the configured strategy and either handles a credential or declines. Namespace your uids ("platform:123"): bans and admin entries key on [member DotAuthIdentity.uid], and bare numeric ids from two providers collide. Worked example: docs/rationale.md.
+## A provider is consulted before the configured strategy and either handles a credential or declines. Namespace your uids ("platform:123"): bans and admin entries key on [member GSAuthIdentity.uid], and bare numeric ids from two providers collide. Worked example: docs/rationale.md.
 
 const CHANNEL := "auth.provider"
 
@@ -17,7 +17,7 @@ const CHANNEL := "auth.provider"
 
 
 
-## Short identifier, used in logs and as the [member DotAuthIdentity.provider].
+## Short identifier, used in logs and as the [member GSAuthIdentity.provider].
 func _provider_name() -> String:
 	return "custom"
 
@@ -27,19 +27,19 @@ func _handles(_credential: Dictionary) -> bool:
 	return false
 
 
-## Resolves the credential to a [DotAuthIdentity]; may be a coroutine.
+## Resolves the credential to a [GSAuthIdentity]; may be a coroutine.
 ##
 ## A failure refuses the login with no fall-through: a provider that claimed a credential owns the decision.
-func _authenticate(_credential: Dictionary) -> DotResult:
-	return DotResult.fail(
-		DotError.CODE_INTERNAL,
+func _authenticate(_credential: Dictionary) -> GSResult:
+	return GSResult.fail(
+		GSError.CODE_INTERNAL,
 		"%s does not implement _authenticate()." % _provider_name()
 	)
 
 
 ## Optional startup check; return a failure to refuse to register (fail at boot, not on the first login).
-func _validate() -> DotResult:
-	return DotResult.success(true)
+func _validate() -> GSResult:
+	return GSResult.success(true)
 
 
 
@@ -51,30 +51,30 @@ func handles(credential: Dictionary) -> bool:
 	return enabled and _handles(credential)
 
 
-func authenticate(credential: Dictionary) -> DotResult:
+func authenticate(credential: Dictionary) -> GSResult:
 	var result: Variant = await _authenticate(credential)
 
-	if not (result is DotResult):
-		return DotResult.fail(
-			DotError.CODE_INTERNAL,
-			"%s returned something other than a DotResult." % _provider_name()
+	if not (result is GSResult):
+		return GSResult.fail(
+			GSError.CODE_INTERNAL,
+			"%s returned something other than a GSResult." % _provider_name()
 		)
 
-	var typed := result as DotResult
+	var typed := result as GSResult
 
-	if typed.ok and not (typed.value is DotAuthIdentity):
-		return DotResult.fail(
-			DotError.CODE_INTERNAL,
-			"%s succeeded but did not return a DotAuthIdentity." % _provider_name()
+	if typed.ok and not (typed.value is GSAuthIdentity):
+		return GSResult.fail(
+			GSError.CODE_INTERNAL,
+			"%s succeeded but did not return a GSAuthIdentity." % _provider_name()
 		)
 
 	# A provider that forgets to namespace its uid is a collision waiting to happen,
 	# and the collision looks like a ban applying to the wrong person. Caught here
 	# rather than discovered in moderation.
 	if typed.ok:
-		var identity := typed.value as DotAuthIdentity
+		var identity := typed.value as GSAuthIdentity
 		if not identity.uid.contains(":"):
-			DotLog.warn(
+			GSLog.warn(
 				CHANNEL,
 				"provider returned an unnamespaced uid; prefix it with the "
 				+ "provider name or it may collide with another provider's ids",
@@ -84,7 +84,7 @@ func authenticate(credential: Dictionary) -> DotResult:
 	return typed
 
 
-func validate() -> DotResult:
+func validate() -> GSResult:
 	return _validate()
 
 

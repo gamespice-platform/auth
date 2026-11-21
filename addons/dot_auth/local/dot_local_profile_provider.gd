@@ -1,14 +1,14 @@
 @tool
-class_name DotLocalProfileProvider
-extends DotAuthProvider
+class_name GSLocalProfileProvider
+extends GSAuthProvider
 
-## Signs players in against [DotLocalProfiles], accounts that never leave this server.
+## Signs players in against [GSLocalProfiles], accounts that never leave this server.
 ##
-## Two separate credentials, [code]local_profile[/code] (returning) and [code]local_profile_new[/code] (first join), so a lost secret never silently mints a new profile. The secret goes out on [signal profile_created], never on the identity: identities are relayed to every player. The signal fires synchronously inside [method DotAuthServer.authenticate], so send it over that peer's own channel, never a broadcast. Usage: docs/rationale.md.
+## Two separate credentials, [code]local_profile[/code] (returning) and [code]local_profile_new[/code] (first join), so a lost secret never silently mints a new profile. The secret goes out on [signal profile_created], never on the identity: identities are relayed to every player. The signal fires synchronously inside [method GSAuthServer.authenticate], so send it over that peer's own channel, never a broadcast. Usage: docs/rationale.md.
 
 const LOCAL_CHANNEL := "auth.local-profile"
 
-## The uid namespace. Distinct from [constant DotAuthConfig.Strategy.LOCAL]'s
+## The uid namespace. Distinct from [constant GSAuthConfig.Strategy.LOCAL]'s
 ## `local:`, which keys on an operator-maintained USERNAME — two different kinds of
 ## account, and a uid collision between them is a ban applying to the wrong person.
 const UID_PREFIX := "profile"
@@ -22,7 +22,7 @@ signal profile_created(id: String, secret: String, name: String)
 signal profile_recognised(id: String, name: String)
 
 ## The store. Required.
-var profiles: DotLocalProfiles = null
+var profiles: GSLocalProfiles = null
 
 ## Whether a visitor may mint a profile, or only use one they already hold (off is a closed, console-managed server).
 var allow_creation: bool = true
@@ -39,21 +39,21 @@ func _handles(credential: Dictionary) -> bool:
 	return credential.has("local_profile") or credential.has("local_profile_new")
 
 
-func _validate() -> DotResult:
+func _validate() -> GSResult:
 	if profiles == null:
-		return DotResult.fail(
-			DotError.CODE_STATE,
-			"DotLocalProfileProvider has no DotLocalProfiles store.",
+		return GSResult.fail(
+			GSError.CODE_STATE,
+			"GSLocalProfileProvider has no GSLocalProfiles store.",
 			"assign `profiles` before registering it"
 		)
 
 	return profiles.open()
 
 
-func _authenticate(credential: Dictionary) -> DotResult:
+func _authenticate(credential: Dictionary) -> GSResult:
 	if profiles == null:
-		return DotResult.fail(
-			DotError.CODE_STATE, "Local profiles are not configured."
+		return GSResult.fail(
+			GSError.CODE_STATE, "Local profiles are not configured."
 		)
 
 	var hint := str(credential.get("device_id", ""))
@@ -64,10 +64,10 @@ func _authenticate(credential: Dictionary) -> DotResult:
 	return _sign_up(credential.get("local_profile_new", {}), hint)
 
 
-func _sign_in(raw: Variant, hint: String) -> DotResult:
+func _sign_in(raw: Variant, hint: String) -> GSResult:
 	if not (raw is Dictionary):
-		return DotResult.fail(
-			DotError.CODE_INVALID, "That is not a profile credential."
+		return GSResult.fail(
+			GSError.CODE_INVALID, "That is not a profile credential."
 		)
 
 	var given := raw as Dictionary
@@ -84,20 +84,20 @@ func _sign_in(raw: Variant, hint: String) -> DotResult:
 
 	profile_recognised.emit(id, name)
 
-	return DotResult.success(_identity(id, name))
+	return GSResult.success(_identity(id, name))
 
 
-func _sign_up(raw: Variant, hint: String) -> DotResult:
+func _sign_up(raw: Variant, hint: String) -> GSResult:
 	if not allow_creation:
-		return DotResult.fail(
-			DotError.CODE_FORBIDDEN,
+		return GSResult.fail(
+			GSError.CODE_FORBIDDEN,
 			"This server is not taking new profiles.",
 			"an operator creates them"
 		)
 
 	if not (raw is Dictionary):
-		return DotResult.fail(
-			DotError.CODE_INVALID, "That is not a profile request."
+		return GSResult.fail(
+			GSError.CODE_INVALID, "That is not a profile request."
 		)
 
 	var made := profiles.create(str((raw as Dictionary).get("name", "")), hint)
@@ -119,16 +119,16 @@ func _sign_up(raw: Variant, hint: String) -> DotResult:
 
 	profile_created.emit(id, secret, name)
 
-	DotLog.info(LOCAL_CHANNEL, "local profile signed up", {"id": id})
+	GSLog.info(LOCAL_CHANNEL, "local profile signed up", {"id": id})
 
-	return DotResult.success(_identity(id, name))
+	return GSResult.success(_identity(id, name))
 
 
 ## Builds the identity a local profile presents.
 ##
 ## [code]is_guest[/code] is false: the player holds a credential this server issued. That also stops a connect packet renaming it, which would make the scoreboard and the store disagree.
-func _identity(id: String, name: String) -> DotAuthIdentity:
-	var identity := DotAuthIdentity.new()
+func _identity(id: String, name: String) -> GSAuthIdentity:
+	var identity := GSAuthIdentity.new()
 
 	identity.provider = UID_PREFIX
 	identity.provider_id = id

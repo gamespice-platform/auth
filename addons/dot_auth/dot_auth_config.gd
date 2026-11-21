@@ -1,8 +1,8 @@
 @tool
-class_name DotAuthConfig
-extends DotConfig
+class_name GSAuthConfig
+extends GSConfig
 
-## Everything configurable about authentication, on both sides, layered like every [DotConfig]; secrets are refused from environment and argv ([method sensitive_keys]).
+## Everything configurable about authentication, on both sides, layered like every [GSConfig]; secrets are refused from environment and argv ([method sensitive_keys]).
 
 ## How a game server decides who a connecting client is.
 enum Strategy {
@@ -32,7 +32,7 @@ enum Strategy {
 ## Entries are `server:<id>` or `app:<id>`, the [member join_audience] a server announces. The join token is redeemable only by the credential its audience names, so a server claiming another's audience gains nothing. Client-side: ship it in the build's config.
 @export var first_party_audiences: PackedStringArray = PackedStringArray()
 
-## Off by default. When on, [method DotAuthClient.request_join_token] given the host and port being dialled sends them as `address`, and refuses a reply that does not echo `addressVerified` (an old backbone, or one that did not check the address): the backbone then mints for a first-party server only if that server really is at that address, so a relay cannot pass itself off as it.
+## Off by default. When on, [method GSAuthClient.request_join_token] given the host and port being dialled sends them as `address`, and refuses a reply that does not echo `addressVerified` (an old backbone, or one that did not check the address): the backbone then mints for a first-party server only if that server really is at that address, so a relay cannot pass itself off as it.
 @export var bind_join_address: bool = false
 
 ## Client name shown on the backbone's device-approval screen; a label the backbone does not trust but the player reads, so use the game's name.
@@ -67,7 +67,7 @@ enum Strategy {
 
 ## The backbone audience this server announces for [constant Strategy.INTROSPECT]: `server:<id>` or `app:<id>`.
 ##
-## Empty reads it from `GET /api/integration/v1/me` once [member DotAuthServer.backbone] is set. A wrong value only breaks joins (`wrong_audience`).
+## Empty reads it from `GET /api/integration/v1/me` once [member GSAuthServer.backbone] is set. A wrong value only breaks joins (`wrong_audience`).
 @export var join_audience: String = ""
 
 ## PEM public key of the ticket issuer, for [constant Strategy.TICKET]. When set it is
@@ -75,11 +75,11 @@ enum Strategy {
 @export_multiline var ticket_public_key: String = ""
 
 ## Issuer public keys by key id (`kid`), filled at runtime by
-## [method DotAuthServer.adopt_ticket_trust]. Not layered: it comes from the backbone only.
+## [method GSAuthServer.adopt_ticket_trust]. Not layered: it comes from the backbone only.
 var ticket_public_keys: Dictionary = {}
 
 ## Let [constant Strategy.TICKET] start with no [member server_id] or key and adopt both
-## later through [method DotAuthServer.adopt_ticket_trust]. Signed-in joins are refused
+## later through [method GSAuthServer.adopt_ticket_trust]. Signed-in joins are refused
 ## until then; a ticket is never verified without an audience.
 @export var adopt_ticket_trust: bool = false
 
@@ -127,9 +127,9 @@ var ticket_public_keys: Dictionary = {}
 
 @export_group("Local profiles")
 
-## Let visitors make an account that lives on THIS server only, via [DotLocalProfiles].
+## Let visitors make an account that lives on THIS server only, via [GSLocalProfiles].
 ##
-## Independent of [member strategy] (it is a [DotAuthProvider]), so backbone tickets and local profiles work together. Not [constant Strategy.LOCAL], an operator-maintained username and password file.
+## Independent of [member strategy] (it is a [GSAuthProvider]), so backbone tickets and local profiles work together. Not [constant Strategy.LOCAL], an operator-maintained username and password file.
 @export var allow_local_profiles: bool = false
 
 ## Where local profiles are stored. Server side; contains hashed credentials.
@@ -141,7 +141,7 @@ var ticket_public_keys: Dictionary = {}
 ## Let a visitor mint a profile, rather than only use one they already hold; off means the operator creates them from the console.
 @export var local_profile_signup: bool = true
 
-## Where a CLIENT keeps the secrets servers issued it, keyed by server. Here because a game configures one [DotAuthConfig] for both halves; the wrong place silently loses every profile.
+## Where a CLIENT keeps the secrets servers issued it, keyed by server. Here because a game configures one [GSAuthConfig] for both halves; the wrong place silently loses every profile.
 @export var local_profile_client_path: String = "user://dot_local_profiles.dat"
 
 @export_group("Issuer")
@@ -203,19 +203,19 @@ func sensitive_keys() -> PackedStringArray:
 	])
 
 
-## The addon name [DotAddonConfig] turns into the folder `dot_auth`.
+## The addon name [GSAddonConfig] turns into the folder `dot_auth`.
 const CFG_ADDON := "dot-auth"
 
 
 ## Applies [param file_name] from `cfg/addons/dot_auth/`, then the operator's `cfg/server/addons/dot_auth/`.
 ## A flat [param legacy_dir]/[param file_name] is still read (one WARN) while no new copy exists.
 ## Secrets stay file-only: the environment and command line still refuse them.
-func apply_cfg_file(file_name: String = "auth.yml", legacy_dir: String = "res://cfg") -> DotResult:
-	return DotAddonConfig.apply_file(CFG_ADDON, file_name, legacy_dir, apply_dictionary)
+func apply_cfg_file(file_name: String = "auth.yml", legacy_dir: String = "res://cfg") -> GSResult:
+	return GSAddonConfig.apply_file(CFG_ADDON, file_name, legacy_dir, apply_dictionary)
 
 
-## [method apply_cfg_file], then `DOT_AUTH_*`, `--auth-*` and validation: [method DotConfig.load_layered] for the yml layout.
-func load_cfg(file_name: String = "auth.yml", legacy_dir: String = "res://cfg") -> DotResult:
+## [method apply_cfg_file], then `DOT_AUTH_*`, `--auth-*` and validation: [method GSConfig.load_layered] for the yml layout.
+func load_cfg(file_name: String = "auth.yml", legacy_dir: String = "res://cfg") -> GSResult:
 	unknown_keys = PackedStringArray()
 	var file_res := apply_cfg_file(file_name, legacy_dir)
 	if not file_res.ok:
@@ -225,38 +225,38 @@ func load_cfg(file_name: String = "auth.yml", legacy_dir: String = "res://cfg") 
 	var valid := validate()
 	if not valid.ok:
 		return valid.wrap("Configuration is invalid.")
-	return DotResult.success(self)
+	return GSResult.success(self)
 
 
-func validate() -> DotResult:
+func validate() -> GSResult:
 	match strategy:
 		Strategy.TICKET:
 			if adopt_ticket_trust:
 				pass
 			elif server_id == "":
-				return DotResult.fail(
-					DotError.CODE_INVALID,
+				return GSResult.fail(
+					GSError.CODE_INVALID,
 					"TICKET authentication needs a server_id.",
 					"tickets are scoped to one server; without an id this "
 					+ "server would accept tickets minted for any other"
 				)
 			if ticket_public_key.strip_edges() == "" and not adopt_ticket_trust:
-				return DotResult.fail(
-					DotError.CODE_INVALID,
+				return GSResult.fail(
+					GSError.CODE_INVALID,
 					"TICKET authentication needs ticket_public_key."
 				)
 
 		Strategy.INTROSPECT:
 			if backbone_url.strip_edges() == "":
-				return DotResult.fail(
-					DotError.CODE_INVALID,
+				return GSResult.fail(
+					GSError.CODE_INVALID,
 					"INTROSPECT authentication needs a backbone_url."
 				)
 
 		Strategy.LOCAL:
 			if local_accounts_path.strip_edges() == "":
-				return DotResult.fail(
-					DotError.CODE_INVALID,
+				return GSResult.fail(
+					GSError.CODE_INVALID,
 					"LOCAL authentication needs local_accounts_path."
 				)
 
@@ -265,16 +265,16 @@ func validate() -> DotResult:
 		return audiences
 
 	if ticket_replay_memory_sec <= ticket_ttl_sec:
-		return DotResult.fail(
-			DotError.CODE_INVALID,
+		return GSResult.fail(
+			GSError.CODE_INVALID,
 			"ticket_replay_memory_sec must exceed ticket_ttl_sec.",
 			"otherwise a ticket outlives the record of having been spent, and "
 			+ "can be replayed in the gap"
 		)
 
 	if single_session and session_lease_sec < ticket_ttl_sec:
-		return DotResult.fail(
-			DotError.CODE_INVALID,
+		return GSResult.fail(
+			GSError.CODE_INVALID,
 			"session_lease_sec must be at least ticket_ttl_sec.",
 			"otherwise a player holds a live ticket for one server after the "
 			+ "issuer has forgotten the session, and can be issued a second "
@@ -283,45 +283,45 @@ func validate() -> DotResult:
 
 	if session_report_url.strip_edges() != "" \
 		and session_report_key.strip_edges() == "":
-		return DotResult.fail(
-			DotError.CODE_INVALID,
+		return GSResult.fail(
+			GSError.CODE_INVALID,
 			"session_report_url needs session_report_key.",
 			"the issuer refuses an unsigned roster; reporting without a key "
 			+ "would fail on every tick"
 		)
 
 	if session_report_url.strip_edges() != "" and server_id.strip_edges() == "":
-		return DotResult.fail(
-			DotError.CODE_INVALID,
+		return GSResult.fail(
+			GSError.CODE_INVALID,
 			"session_report_url needs a server_id.",
 			"a roster has to say which server it is the roster of"
 		)
 
-	return DotResult.success(null)
+	return GSResult.success(null)
 
 
-func _validate_audiences() -> DotResult:
+func _validate_audiences() -> GSResult:
 	for entry in first_party_audiences:
 		if not is_audience(entry):
-			return DotResult.fail(
-				DotError.CODE_INVALID,
+			return GSResult.fail(
+				GSError.CODE_INVALID,
 				"first_party_audiences entries must look like server:<id> or app:<id>.",
 				"got %s" % entry
 			)
 
 	if join_audience != "" and not is_audience(join_audience):
-		return DotResult.fail(
-			DotError.CODE_INVALID,
+		return GSResult.fail(
+			GSError.CODE_INVALID,
 			"join_audience must look like server:<id> or app:<id>.",
 			"got %s" % join_audience
 		)
-	return DotResult.success(null)
+	return GSResult.success(null)
 
 
 ## Warns about settings that are legal but risky. Called at startup.
 func warn_about_risky_settings() -> void:
 	if strategy == Strategy.INTROSPECT:
-		DotLog.warn(
+		GSLog.warn(
 			"auth",
 			"INTROSPECT strategy: only clients that list this server in "
 			+ "first_party_audiences will join, each with a single-use join token. "
@@ -330,7 +330,7 @@ func warn_about_risky_settings() -> void:
 		)
 
 	if strategy == Strategy.ANONYMOUS:
-		DotLog.warn(
+		GSLog.warn(
 			"auth",
 			"ANONYMOUS strategy: nobody is authenticated, so bans and admin "
 			+ "entries cannot be tied to a person",
@@ -338,7 +338,7 @@ func warn_about_risky_settings() -> void:
 		)
 
 	if allow_guests and strategy != Strategy.ANONYMOUS:
-		DotLog.warn(
+		GSLog.warn(
 			"auth",
 			"allow_guests is on — a banned player can return as a guest",
 			{"setting": "allow_guests"}

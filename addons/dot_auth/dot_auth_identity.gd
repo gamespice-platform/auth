@@ -1,5 +1,5 @@
 @tool
-class_name DotAuthIdentity
+class_name GSAuthIdentity
 extends Resource
 
 ## Who a player is: an identifier a server can ban, a name it can show, and claims it can check.
@@ -42,8 +42,8 @@ extends Resource
 @export var is_guest: bool = false
 
 
-static func guest(device_id: String, name: String = "") -> DotAuthIdentity:
-	var id := DotAuthIdentity.new()
+static func guest(device_id: String, name: String = "") -> GSAuthIdentity:
+	var id := GSAuthIdentity.new()
 	id.provider = "guest"
 	id.provider_id = device_id
 	id.uid = "guest:%s" % device_id
@@ -54,16 +54,16 @@ static func guest(device_id: String, name: String = "") -> DotAuthIdentity:
 
 
 ## Builds an identity from the backbone's `SessionUserSchema` (field names mirror `~/types/app-api/contract.ts`); only [member uid] is validated.
-static func from_backbone_user(d: Dictionary) -> DotResult:
+static func from_backbone_user(d: Dictionary) -> GSResult:
 	var provider_id := str(d.get("id", ""))
 	if provider_id == "":
-		return DotResult.fail(
-			DotError.CODE_PARSE,
+		return GSResult.fail(
+			GSError.CODE_PARSE,
 			"The backbone returned a user with no id.",
 			JSON.stringify(d).substr(0, 200)
 		)
 
-	var id := DotAuthIdentity.new()
+	var id := GSAuthIdentity.new()
 	id.provider = "backbone"
 	id.provider_id = provider_id
 	id.uid = "backbone:%s" % provider_id
@@ -75,13 +75,13 @@ static func from_backbone_user(d: Dictionary) -> DotResult:
 	id.role = str(d.get("role", ""))
 	id.authenticated_at = int(Time.get_unix_time_from_system())
 
-	return DotResult.success(id)
+	return GSResult.success(id)
 
 
 ## Builds an identity from the backbone's scoped introspection answer `{key, name, username}`.
 ##
 ## No account id on purpose: the uid is `tmc:<key>`, stable for this player on this server and meaningless elsewhere. The key also goes in the `scoped_key` claim, which GameSpice User reads; a key derived here could never be resolved by the backbone.
-static func from_scoped_user(d: Dictionary) -> DotResult:
+static func from_scoped_user(d: Dictionary) -> GSResult:
 	var key := str(d.get("key", ""))
 
 	# The backbone's own key shape (`ScopeKeyRx`), checked because it becomes a uid,
@@ -89,13 +89,13 @@ static func from_scoped_user(d: Dictionary) -> DotResult:
 	var rx := RegEx.create_from_string("^[A-Za-z0-9_-]{8,64}$")
 
 	if rx.search(key) == null:
-		return DotResult.fail(
-			DotError.CODE_PARSE,
+		return GSResult.fail(
+			GSError.CODE_PARSE,
 			"The backbone returned a player with no usable key.",
 			JSON.stringify(d).substr(0, 200)
 		)
 
-	var id := DotAuthIdentity.new()
+	var id := GSAuthIdentity.new()
 	id.provider = "tmc"
 	id.provider_id = key
 	id.uid = "tmc:%s" % key
@@ -106,11 +106,11 @@ static func from_scoped_user(d: Dictionary) -> DotResult:
 	id.claims = {"scoped_key": key}
 	id.authenticated_at = int(Time.get_unix_time_from_system())
 
-	return DotResult.success(id)
+	return GSResult.success(id)
 
 
-static func from_dict(d: Dictionary) -> DotAuthIdentity:
-	var id := DotAuthIdentity.new()
+static func from_dict(d: Dictionary) -> GSAuthIdentity:
+	var id := GSAuthIdentity.new()
 	id.uid = str(d.get("uid", ""))
 	id.provider = str(d.get("provider", ""))
 	id.provider_id = str(d.get("provider_id", ""))
@@ -190,4 +190,4 @@ func label() -> String:
 
 
 func _to_string() -> String:
-	return "DotAuthIdentity(%s)" % label()
+	return "GSAuthIdentity(%s)" % label()

@@ -10,9 +10,9 @@ Sign-in for Godot 4.7+ games and dedicated servers. A player signs in against a 
 ## Client
 
 ```gdscript
-var auth := DotAuthClient.new()
+var auth := GSAuthClient.new()
 add_child(auth)
-auth.config = DotAuthConfig.new()
+auth.config = GSAuthConfig.new()
 auth.config.backbone_url = "https://moddingcommunity.com"
 auth.config.client_name = "My Game"
 
@@ -22,7 +22,7 @@ auth.device_code_ready.connect(func(user_code, url, _expires):
 
 var res := await auth.sign_in()
 if res.ok:
-    print("hello ", (res.value as DotAuthIdentity).display_name)
+    print("hello ", (res.value as GSAuthIdentity).display_name)
 ```
 
 Sign-in uses a device code, so the password is only typed on the website, and the same flow works on desktop, mobile, console and in a browser. Returning players do not see a code: `sign_in()` restores the session from a stored refresh token.
@@ -30,9 +30,9 @@ Sign-in uses a device code, so the password is only typed on the website, and th
 ## Server
 
 ```gdscript
-var auth := DotAuthServer.new()
+var auth := GSAuthServer.new()
 add_child(auth)
-auth.config.strategy = DotAuthConfig.Strategy.TICKET
+auth.config.strategy = GSAuthConfig.Strategy.TICKET
 auth.config.server_id = "eu-west-1"
 auth.config.ticket_public_key = ISSUER_PUBLIC_KEY
 
@@ -40,7 +40,7 @@ var res := await auth.authenticate({"ticket": ticket_from_client}, peer_address)
 if not res.ok:
     reject(res.error.message)
     return
-var identity: DotAuthIdentity = res.value
+var identity: GSAuthIdentity = res.value
 ```
 
 Tickets are checked offline, with no back-end request per join.
@@ -51,12 +51,12 @@ A community server that receives a player's account token could act as that play
 
 ```
 client --(device code + PKCE)--> back end         who am I
-client --(access token)-------> DotAuthIssuer     publisher-run
-client <-(signed ticket)------- DotAuthIssuer     one server, a few minutes
+client --(access token)-------> GSAuthIssuer     publisher-run
+client <-(signed ticket)------- GSAuthIssuer     one server, a few minutes
 client --(ticket)-------------> game server       verified offline
 ```
 
-A ticket is scoped to one server, short-lived, single-use and RSA-signed. A server can verify a ticket but cannot create one, and a ticket captured on one server is refused by all others. Only `DotAuthIssuer` needs the private key. See [docs/tickets.md](docs/tickets.md).
+A ticket is scoped to one server, short-lived, single-use and RSA-signed. A server can verify a ticket but cannot create one, and a ticket captured on one server is refused by all others. Only `GSAuthIssuer` needs the private key. See [docs/tickets.md](docs/tickets.md).
 
 ## Strategies
 
@@ -83,7 +83,7 @@ config.local_profiles_path = "user://profiles.json"
 
 ```gdscript
 # Client: present what we hold for this server, or ask for a new profile.
-var keeper := DotLocalProfileClient.at("user://local_profiles.dat")
+var keeper := GSLocalProfileClient.at("user://local_profiles.dat")
 keeper.open()
 
 var credential := keeper.credential_for(server_id)
@@ -100,14 +100,14 @@ The server issues the credential. The client does not just claim a name, so typi
 
 Defaults live in `cfg/addon/dot_auth/auth.yml`. A game overrides them in `cfg/game/<game>/dot_auth/`, and the server operator in `cfg/server/addon/dot_auth/` or `cfg/server/game/<game>/dot_auth/` (strongest). See [dot-core's addon-config.md](https://github.com/gamespice-platform/core/blob/main/docs/addon-config.md).
 
-`DotAuthConfig.new().load_cfg()` reads these files, then `DOT_AUTH_*` environment variables and `--auth-*` command-line flags. Secrets (`issuer_private_key`, `integration_token`, `session_report_key`) are read from a file only, never from the environment or command line.
+`GSAuthConfig.new().load_cfg()` reads these files, then `DOT_AUTH_*` environment variables and `--auth-*` command-line flags. Secrets (`issuer_private_key`, `integration_token`, `session_report_key`) are read from a file only, never from the environment or command line.
 
 ## Also included
 
 | Class | What it does |
 | --- | --- |
-| `DotBackboneClient` | Reports a dedicated server's player count, map and roster to its site listing, with replay protection. |
-| `DotAuthAdminSource` | Maps site groups, roles and claims to GameSpice Server permission flags and immunity levels. Guests never get permissions, and site roles grant nothing unless you map them. |
+| `GSBackboneClient` | Reports a dedicated server's player count, map and roster to its site listing, with replay protection. |
+| `GSAuthAdminSource` | Maps site groups, roles and claims to GameSpice Server permission flags and immunity levels. Guests never get permissions, and site roles grant nothing unless you map them. |
 
 ## Try it
 
@@ -121,7 +121,7 @@ The demo is an offline self-test. It exits non-zero on any failure. Run a ticket
 
 ## Limits to know about
 
-`DotAuthServer.hash_password` is salted SHA-256, not argon2, because Godot has no password KDF. It only keeps a LAN server from storing plaintext. Real accounts belong on the back end. On web, token-store encryption is obfuscation, because the key and the ciphertext share an origin. See [docs/security.md](docs/security.md#two-things-that-are-weaker-than-they-look).
+`GSAuthServer.hash_password` is salted SHA-256, not argon2, because Godot has no password KDF. It only keeps a LAN server from storing plaintext. Real accounts belong on the back end. On web, token-store encryption is obfuscation, because the key and the ciphertext share an origin. See [docs/security.md](docs/security.md#two-things-that-are-weaker-than-they-look).
 
 ## Status
 

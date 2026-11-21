@@ -21,7 +21,7 @@ const CHECKS := 222
 
 
 func _ready() -> void:
-	DotLog.set_level(DotLog.Level.WARN)
+	GSLog.set_level(GSLog.Level.WARN)
 	await _run()
 
 
@@ -29,7 +29,7 @@ func _run() -> void:
 	_line("[b]dot-auth self-test[/b]")
 	_line("")
 
-	var keys := DotCloudKeys_generate()
+	var keys := GSCloudKeys_generate()
 	if keys.is_empty():
 		_line("  keypair          FAILED to generate")
 		return _finish()
@@ -77,11 +77,11 @@ func _test_scoped_introspect() -> void:
 	_line("")
 	_section("[b]scoped introspection[/b]")
 
-	var config := DotAuthConfig.new()
-	config.strategy = DotAuthConfig.Strategy.INTROSPECT
+	var config := GSAuthConfig.new()
+	config.strategy = GSAuthConfig.Strategy.INTROSPECT
 	config.backbone_url = "http://127.0.0.1:9"
 	config.allow_guests = false
-	var server := DotAuthServer.new()
+	var server := GSAuthServer.new()
 	server.config = config
 	server.config_file = ""
 	server.register_service = false
@@ -90,8 +90,8 @@ func _test_scoped_introspect() -> void:
 	add_child(server)
 	server.start()
 
-	var got: DotResult = await server.authenticate({"access_token": "live"}, "10.0.5.1")
-	var who: DotAuthIdentity = got.value if got.ok else null
+	var got: GSResult = await server.authenticate({"access_token": "live"}, "10.0.5.1")
+	var who: GSAuthIdentity = got.value if got.ok else null
 	_check("a live token is asked about AS this server",
 		fake.asked.size() == 1 and fake.asked[0][0] == "player/introspect"
 			and fake.asked[0][1].get("access_token") == "live", got)
@@ -101,42 +101,42 @@ func _test_scoped_introspect() -> void:
 		who != null and who.claims.get("scoped_key") == "Kq3_scopedKey-forThis1", got)
 	_check("with the member's name", who != null and who.display_name == "Ada", got)
 
-	var dead: DotResult = await server.authenticate({"access_token": "stale"}, "10.0.5.2")
+	var dead: GSResult = await server.authenticate({"access_token": "stale"}, "10.0.5.2")
 	_check("a dead token is a sign-in that is no longer valid",
-		not dead.ok and dead.error.code == DotError.CODE_AUTH, dead)
-	var wrong: DotResult = await server.authenticate({"access_token": "other-app"}, "10.0.5.3")
+		not dead.ok and dead.error.code == GSError.CODE_AUTH, dead)
+	var wrong: GSResult = await server.authenticate({"access_token": "other-app"}, "10.0.5.3")
 	_check("a token for another game is refused as forbidden",
-		not wrong.ok and wrong.error.code == DotError.CODE_FORBIDDEN, wrong)
+		not wrong.ok and wrong.error.code == GSError.CODE_FORBIDDEN, wrong)
 
-	var bad := DotAuthIdentity.from_scoped_user({"key": "../x"})
+	var bad := GSAuthIdentity.from_scoped_user({"key": "../x"})
 	_check("a key that is not a key is refused", not bad.ok, bad)
 
 	# Join tokens: what a current client sends instead of its access token.
-	var device: DotResult = await server.authenticate({"access_token": "device-token"}, "10.0.5.4")
+	var device: GSResult = await server.authenticate({"access_token": "device-token"}, "10.0.5.4")
 	_check("an old client's account token: told to update",
-		not device.ok and device.error.code == DotError.CODE_FORBIDDEN
+		not device.ok and device.error.code == GSError.CODE_FORBIDDEN
 			and device.error.message.contains("update"), device)
-	var elsewhere: DotResult = await server.authenticate({"access_token": "tmc_jt_elsewhere"}, "10.0.5.5")
+	var elsewhere: GSResult = await server.authenticate({"access_token": "tmc_jt_elsewhere"}, "10.0.5.5")
 	_check("a join token for another server is refused as such",
-		not elsewhere.ok and elsewhere.error.code == DotError.CODE_FORBIDDEN
+		not elsewhere.ok and elsewhere.error.code == GSError.CODE_FORBIDDEN
 			and elsewhere.error.message.contains("different server"), elsewhere)
 
 	config.join_audience = "server:42"
 	_check("the audience it announces is the pinned one",
 		server.join_audience() == "server:42", null)
 	_check("an audience must name one target",
-		DotAuthConfig.is_audience("server:42") and DotAuthConfig.is_audience("app:7")
-			and not DotAuthConfig.is_audience("global")
-			and not DotAuthConfig.is_audience("server:0")
-			and not DotAuthConfig.is_audience("server:42x"), null)
+		GSAuthConfig.is_audience("server:42") and GSAuthConfig.is_audience("app:7")
+			and not GSAuthConfig.is_audience("global")
+			and not GSAuthConfig.is_audience("server:0")
+			and not GSAuthConfig.is_audience("server:42x"), null)
 
 	server.queue_free()
 	fake.free()
 
 	# Without a backbone a join token cannot be resolved: say so, never "/me" it.
-	var bare := DotAuthServer.new()
-	var bare_config := DotAuthConfig.new()
-	bare_config.strategy = DotAuthConfig.Strategy.INTROSPECT
+	var bare := GSAuthServer.new()
+	var bare_config := GSAuthConfig.new()
+	bare_config.strategy = GSAuthConfig.Strategy.INTROSPECT
 	bare_config.backbone_url = "http://127.0.0.1:9"
 	bare_config.allow_guests = false
 	bare.config = bare_config
@@ -144,9 +144,9 @@ func _test_scoped_introspect() -> void:
 	bare.register_service = false
 	add_child(bare)
 	bare.start()
-	var unresolvable: DotResult = await bare.authenticate({"access_token": "tmc_jt_x"}, "10.0.5.6")
+	var unresolvable: GSResult = await bare.authenticate({"access_token": "tmc_jt_x"}, "10.0.5.6")
 	_check("no backbone: a join token fails in words",
-		not unresolvable.ok and unresolvable.error.code == DotError.CODE_STATE, unresolvable)
+		not unresolvable.ok and unresolvable.error.code == GSError.CODE_STATE, unresolvable)
 	bare.queue_free()
 
 	await _test_join_client_half()
@@ -156,15 +156,15 @@ func _test_scoped_introspect() -> void:
 ## The client half of join tokens: what it mints, and which replies it accepts.
 func _test_join_client_half() -> void:
 	# The client half: nothing is minted for a server the build does not list.
-	var client_config := DotAuthConfig.new()
+	var client_config := GSAuthConfig.new()
 	client_config.first_party_audiences = PackedStringArray(["server:42"])
-	var client := DotAuthClient.new()
+	var client := GSAuthClient.new()
 	client.config = client_config
 	_check("a listed server is first-party", client.is_first_party("server:42"), null)
 	_check("another is not", not client.is_first_party("server:43"), null)
-	var refused: DotResult = await client.request_join_token("server:43")
+	var refused: GSResult = await client.request_join_token("server:43")
 	_check("and no join token is requested for it",
-		not refused.ok and refused.error.code == DotError.CODE_FORBIDDEN, refused)
+		not refused.ok and refused.error.code == GSError.CODE_FORBIDDEN, refused)
 	# Address binding (default off): refuse a reply that does not echo addressVerified.
 	_check("address binding is off by default", not client_config.bind_join_address, null)
 	var ok_reply := {"token": "tmc_jt_abc", "addressVerified": true}
@@ -173,9 +173,9 @@ func _test_join_client_half() -> void:
 		client.join_token_from_reply(old_reply, "server:42", false).ok, null)
 	_check("on: a verified reply is accepted",
 		client.join_token_from_reply(ok_reply, "server:42", true).ok, null)
-	var unverified: DotResult = client.join_token_from_reply(old_reply, "server:42", true)
+	var unverified: GSResult = client.join_token_from_reply(old_reply, "server:42", true)
 	_check("on: a reply lacking addressVerified is refused",
-		not unverified.ok and unverified.error.code == DotError.CODE_FORBIDDEN, unverified)
+		not unverified.ok and unverified.error.code == GSError.CODE_FORBIDDEN, unverified)
 	_check("on: addressVerified false is refused",
 		not client.join_token_from_reply({"token": "tmc_jt_abc", "addressVerified": false}, "server:42", true).ok, null)
 	_check("on: a non-object reply is refused",
@@ -187,7 +187,7 @@ func _test_join_client_half() -> void:
 func _test_tickets(keys: Dictionary) -> void:
 	_section("[b]connect tickets[/b]")
 
-	var identity := DotAuthIdentity.new()
+	var identity := GSAuthIdentity.new()
 	identity.uid = "backbone:clx8f2k0000"
 	identity.provider = "backbone"
 	identity.provider_id = "clx8f2k0000"
@@ -196,7 +196,7 @@ func _test_tickets(keys: Dictionary) -> void:
 	identity.role = "USER"
 	identity.claims = {"groups": ["moderators"], "supporter": true}
 
-	var minted := DotAuthTicket.issue(
+	var minted := GSAuthTicket.issue(
 		identity, SERVER_A, str(keys["private"]), "dot-auth-test", 300
 	)
 	_check("mint", minted.ok, minted)
@@ -206,14 +206,14 @@ func _test_tickets(keys: Dictionary) -> void:
 	var ticket: String = minted.value
 
 	# The happy path.
-	var verified := DotAuthTicket.verify(
+	var verified := GSAuthTicket.verify(
 		ticket, str(keys["public"]), SERVER_A
 	)
 	_check("verify", verified.ok, verified)
 
 	if verified.ok:
 		var d: Dictionary = verified.value
-		var got: DotAuthIdentity = d["identity"]
+		var got: GSAuthIdentity = d["identity"]
 		_check("identity survives", got.uid == identity.uid, null)
 		_check("claims survive", got.has_claim("supporter"), null)
 		_check(
@@ -223,77 +223,77 @@ func _test_tickets(keys: Dictionary) -> void:
 		)
 
 	# Audience scoping: the whole reason tickets are server-specific.
-	var wrong_server := DotAuthTicket.verify(
+	var wrong_server := GSAuthTicket.verify(
 		ticket, str(keys["public"]), SERVER_B
 	)
 	_check(
 		"refused by other server",
-		not wrong_server.ok and wrong_server.code() == DotError.CODE_FORBIDDEN,
+		not wrong_server.ok and wrong_server.code() == GSError.CODE_FORBIDDEN,
 		wrong_server
 	)
 
 	# Tampering: flip a byte of the payload segment.
 	var parts := ticket.split(".")
-	var payload := DotHash.base64url_decode_text(parts[1])
+	var payload := GSHash.base64url_decode_text(parts[1])
 	var hacked := payload.replace("\"Ada\"", "\"Eve\"")
 	var forged := "%s.%s.%s" % [
-		parts[0], DotHash.base64url_encode_text(hacked), parts[2]
+		parts[0], GSHash.base64url_encode_text(hacked), parts[2]
 	]
-	var tamper := DotAuthTicket.verify(
+	var tamper := GSAuthTicket.verify(
 		forged, str(keys["public"]), SERVER_A
 	)
 	_check(
 		"tampered payload refused",
-		not tamper.ok and tamper.code() == DotError.CODE_INTEGRITY,
+		not tamper.ok and tamper.code() == GSError.CODE_INTEGRITY,
 		tamper
 	)
 
 	# Algorithm confusion: sign an HS256 token using the RSA *public* key as the
 	# HMAC secret — which is public — and offer it where RS256 is expected. A
 	# verifier that dispatches on the token's own `alg` header accepts this.
-	var claims := DotJwt.base_claims("dot-auth-test", identity.uid, SERVER_A, 300)
-	var hs := DotJwt.encode_hs256(claims, str(keys["public"]))
+	var claims := GSJwt.base_claims("dot-auth-test", identity.uid, SERVER_A, 300)
+	var hs := GSJwt.encode_hs256(claims, str(keys["public"]))
 	if hs.ok:
-		var confused := DotAuthTicket.verify(
+		var confused := GSAuthTicket.verify(
 			str(hs.value), str(keys["public"]), SERVER_A
 		)
 		_check(
 			"HS256-for-RS256 refused",
-			not confused.ok and confused.code() == DotError.CODE_INTEGRITY,
+			not confused.ok and confused.code() == GSError.CODE_INTEGRITY,
 			confused
 		)
 
 	# Expiry, with leeway set to zero so a negative TTL is genuinely past.
-	var expired := DotAuthTicket.issue(
+	var expired := GSAuthTicket.issue(
 		identity, SERVER_A, str(keys["private"]), "dot-auth-test", -600
 	)
 	if expired.ok:
-		var exp_check := DotAuthTicket.verify(
+		var exp_check := GSAuthTicket.verify(
 			str(expired.value), str(keys["public"]), SERVER_A, 0
 		)
 		_check(
 			"expired ticket refused",
-			not exp_check.ok and exp_check.code() == DotError.CODE_AUTH,
+			not exp_check.ok and exp_check.code() == GSError.CODE_AUTH,
 			exp_check
 		)
 
 		# The same ticket accepted when leeway covers the gap, proving the leeway
 		# path works rather than expiry simply always failing.
-		var lenient := DotAuthTicket.verify(
+		var lenient := GSAuthTicket.verify(
 			str(expired.value), str(keys["public"]), SERVER_A, 3600
 		)
 		_check("leeway honoured", lenient.ok, lenient)
 
-	# Replay, through a real DotAuthServer so the spent-ticket memory is exercised.
-	var config := DotAuthConfig.new()
-	config.strategy = DotAuthConfig.Strategy.TICKET
+	# Replay, through a real GSAuthServer so the spent-ticket memory is exercised.
+	var config := GSAuthConfig.new()
+	config.strategy = GSAuthConfig.Strategy.TICKET
 	config.server_id = SERVER_A
 	config.ticket_public_key = str(keys["public"])
 	config.ticket_ttl_sec = 300
 	config.ticket_replay_memory_sec = 900
 	config.allow_guests = false
 
-	var server := DotAuthServer.new()
+	var server := GSAuthServer.new()
 	server.name = "AuthServer"
 	server.config = config
 	server.config_file = ""
@@ -309,7 +309,7 @@ func _test_tickets(keys: Dictionary) -> void:
 	var second := await server.authenticate({"ticket": ticket}, "peer2")
 	_check(
 		"replay refused",
-		not second.ok and second.code() == DotError.CODE_FORBIDDEN,
+		not second.ok and second.code() == GSError.CODE_FORBIDDEN,
 		second
 	)
 
@@ -317,7 +317,7 @@ func _test_tickets(keys: Dictionary) -> void:
 	var none := await server.authenticate({}, "peer3")
 	_check(
 		"missing ticket refused",
-		not none.ok and none.code() == DotError.CODE_AUTH,
+		not none.ok and none.code() == GSError.CODE_AUTH,
 		none
 	)
 
@@ -326,7 +326,7 @@ func _test_tickets(keys: Dictionary) -> void:
 	var guest := await server.authenticate({"device_id": "abc"}, "peer4")
 	_check(
 		"guest fallback works",
-		guest.ok and (guest.value as DotAuthIdentity).is_guest,
+		guest.ok and (guest.value as GSAuthIdentity).is_guest,
 		guest
 	)
 
@@ -336,11 +336,11 @@ func _test_tickets(keys: Dictionary) -> void:
 	)
 	_check(
 		"guest may name itself",
-		named.ok and (named.value as DotAuthIdentity).display_name == "Chosen",
+		named.ok and (named.value as GSAuthIdentity).display_name == "Chosen",
 		named
 	)
 
-	var fresh := DotAuthTicket.issue(
+	var fresh := GSAuthTicket.issue(
 		identity, SERVER_A, str(keys["private"]), "dot-auth-test", 300
 	)
 	var impersonate := await server.authenticate(
@@ -349,7 +349,7 @@ func _test_tickets(keys: Dictionary) -> void:
 	_check(
 		"account name not overridable",
 		impersonate.ok
-			and (impersonate.value as DotAuthIdentity).display_name == "Ada",
+			and (impersonate.value as GSAuthIdentity).display_name == "Ada",
 		impersonate
 	)
 
@@ -360,7 +360,7 @@ func _test_tickets(keys: Dictionary) -> void:
 
 
 func _finish() -> void:
-	if DotPlatform.is_headless():
+	if GSPlatform.is_headless():
 		await get_tree().process_frame
 		get_tree().quit(1 if _failed > 0 else 0)
 
@@ -370,8 +370,8 @@ func _finish() -> void:
 ##
 ## The roster path runs over a real socket through the issuer's own listener, the one part a unit call cannot reach.
 func _check_session_config_refusals(port: int) -> void:
-	var bad := DotAuthConfig.new()
-	bad.strategy = DotAuthConfig.Strategy.ANONYMOUS
+	var bad := GSAuthConfig.new()
+	bad.strategy = GSAuthConfig.Strategy.ANONYMOUS
 	bad.single_session = true
 	bad.ticket_ttl_sec = 300
 	bad.session_lease_sec = 60
@@ -381,8 +381,8 @@ func _check_session_config_refusals(port: int) -> void:
 		null
 	)
 
-	var unkeyed := DotAuthConfig.new()
-	unkeyed.strategy = DotAuthConfig.Strategy.ANONYMOUS
+	var unkeyed := GSAuthConfig.new()
+	unkeyed.strategy = GSAuthConfig.Strategy.ANONYMOUS
 	unkeyed.server_id = SERVER_A
 	unkeyed.session_report_url = "http://127.0.0.1:%d" % port
 	_check(
@@ -398,7 +398,7 @@ func _test_single_session(keys: Dictionary) -> void:
 	const PORT := 18787
 	const KEY_A := "server-a-key-0123456789abcdef"
 
-	var ada := DotAuthIdentity.new()
+	var ada := GSAuthIdentity.new()
 	ada.uid = "backbone:ada"
 	ada.provider = "backbone"
 	ada.provider_id = "ada"
@@ -407,7 +407,7 @@ func _test_single_session(keys: Dictionary) -> void:
 
 	_check_session_config_refusals(PORT)
 
-	var config := DotAuthConfig.new()
+	var config := GSAuthConfig.new()
 	config.issuer_private_key = str(keys["private"])
 	config.issuer_name = "dot-auth-test"
 	# Nothing here may reach the real backbone. The one request below that
@@ -418,7 +418,7 @@ func _test_single_session(keys: Dictionary) -> void:
 	config.session_lease_sec = 300
 	config.single_session = true
 
-	var issuer := DotAuthIssuer.new()
+	var issuer := GSAuthIssuer.new()
 	issuer.name = "Issuer"
 	issuer.config = config
 	issuer.config_file = ""
@@ -453,7 +453,7 @@ func _test_single_session(keys: Dictionary) -> void:
 	var elsewhere := issuer.issue_for_identity(ada, SERVER_B)
 	_check(
 		"a ticket for another server is refused",
-		not elsewhere.ok and elsewhere.code() == DotError.CODE_FORBIDDEN,
+		not elsewhere.ok and elsewhere.code() == GSError.CODE_FORBIDDEN,
 		elsewhere
 	)
 	_check(
@@ -556,7 +556,7 @@ func _test_single_session(keys: Dictionary) -> void:
 		_done()
 		return
 
-	var http := DotHttp.new()
+	var http := GSHttp.new()
 	http.name = "DemoHttp"
 	http.max_retries = 0
 	add_child(http)
@@ -614,15 +614,15 @@ func _test_single_session(keys: Dictionary) -> void:
 
 	# The server's own reporter, end to end: a roster that lands makes the
 	# refusal happen, and the goodbye lifts it.
-	var server_config := DotAuthConfig.new()
-	server_config.strategy = DotAuthConfig.Strategy.TICKET
+	var server_config := GSAuthConfig.new()
+	server_config.strategy = GSAuthConfig.Strategy.TICKET
 	server_config.server_id = SERVER_A
 	server_config.ticket_public_key = str(keys["public"])
 	server_config.session_report_url = url
 	server_config.session_report_key = KEY_A
 	_check("the reporting config validates", server_config.validate().ok, server_config.validate())
 
-	var reporter := DotAuthSessionReporter.new()
+	var reporter := GSAuthSessionReporter.new()
 	reporter.name = "SessionReporter"
 	reporter.config = server_config
 	reporter.auto_report = false
@@ -630,7 +630,7 @@ func _test_single_session(keys: Dictionary) -> void:
 
 	_check(
 		"guests and duplicates are left out of a roster",
-		DotAuthSessionReporter.normalise_roster(
+		GSAuthSessionReporter.normalise_roster(
 			[ada, ada.uid, "guest:abc", {"uid": "backbone:bob"}, ""]
 		) == PackedStringArray([ada.uid, "backbone:bob"]),
 		null
@@ -655,7 +655,7 @@ func _test_single_session(keys: Dictionary) -> void:
 		null
 	)
 
-	# What a client is told. The issuer's own message has to survive DotHttp's
+	# What a client is told. The issuer's own message has to survive GSHttp's
 	# "Not allowed." — it is the one that names the server.
 	issuer.report_sessions(SERVER_A, PackedStringArray([ada.uid]))
 	var ticket_elsewhere := await http.post_json(

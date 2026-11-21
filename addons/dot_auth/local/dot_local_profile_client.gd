@@ -1,8 +1,8 @@
 @tool
-class_name DotLocalProfileClient
+class_name GSLocalProfileClient
 extends RefCounted
 
-## The client half of [DotLocalProfiles]: the secrets this machine holds, keyed by SERVER.
+## The client half of [GSLocalProfiles]: the secrets this machine holds, keyed by SERVER.
 ##
 ## Keyed by server so one server's credential is never presented to another. Encrypted at rest with the token store's caveat: on web the key shares an origin with the ciphertext, so it is obfuscation there. Usage: docs/rationale.md.
 
@@ -18,37 +18,37 @@ var _entries: Dictionary = {}
 var _opened: bool = false
 
 
-static func at(p_path: String) -> DotLocalProfileClient:
-	var s := DotLocalProfileClient.new()
+static func at(p_path: String) -> GSLocalProfileClient:
+	var s := GSLocalProfileClient.new()
 	s.path = p_path
 	return s
 
 
-func open() -> DotResult:
+func open() -> GSResult:
 	if _opened:
-		return DotResult.success(_entries.size())
+		return GSResult.success(_entries.size())
 
 	_entries.clear()
 	_opened = true
 
 	if not FileAccess.file_exists(path):
-		return DotResult.success(0)
+		return GSResult.success(0)
 
-	var read: DotResult = (
-		DotPaths.read_encrypted(path, _passphrase())
+	var read: GSResult = (
+		GSPaths.read_encrypted(path, _passphrase())
 		if encrypt
-		else DotPaths.read_text(path)
+		else GSPaths.read_text(path)
 	)
 
 	if not read.ok:
 		# An unreadable file counts as no file: the next join mints a new profile rather than refusing to start.
-		DotLog.warn(
+		GSLog.warn(
 			CLIENT_CHANNEL,
 			"could not read stored local profiles; starting empty",
 			{"why": read.error.message if read.error != null else "unknown"}
 		)
 
-		return DotResult.success(0)
+		return GSResult.success(0)
 
 	var text := (
 		(read.value as PackedByteArray).get_string_from_utf8()
@@ -64,7 +64,7 @@ func open() -> DotResult:
 		if rows is Dictionary:
 			_entries = rows as Dictionary
 
-	return DotResult.success(_entries.size())
+	return GSResult.success(_entries.size())
 
 
 ## The credential to present to [param server_id], or [code]{}[/code] if none (the normal first state, not an error).
@@ -104,13 +104,13 @@ func remember(
 	id: String,
 	secret: String,
 	name: String = ""
-) -> DotResult:
+) -> GSResult:
 	if not _opened:
 		open()
 
 	if server_id.strip_edges() == "" or id == "" or secret == "":
-		return DotResult.fail(
-			DotError.CODE_INVALID, "A profile needs a server, an id and a secret."
+		return GSResult.fail(
+			GSError.CODE_INVALID, "A profile needs a server, an id and a secret."
 		)
 
 	_entries[server_id] = {
@@ -128,35 +128,35 @@ func remember(
 
 ## Forgets one server's profile. The player stays on the server; they are a stranger
 ## to it next time.
-func forget(server_id: String) -> DotResult:
+func forget(server_id: String) -> GSResult:
 	if not _entries.has(server_id):
-		return DotResult.success(false)
+		return GSResult.success(false)
 
 	_entries.erase(server_id)
 
 	return _save()
 
 
-func forget_all() -> DotResult:
+func forget_all() -> GSResult:
 	_entries.clear()
 
 	return _save()
 
 
-func _save() -> DotResult:
+func _save() -> GSResult:
 	var text := JSON.stringify({"version": 1, "servers": _entries})
 
 	if not encrypt:
-		return DotPaths.write_text(path, text)
+		return GSPaths.write_text(path, text)
 
-	return DotPaths.write_encrypted(path, text.to_utf8_buffer(), _passphrase())
+	return GSPaths.write_encrypted(path, text.to_utf8_buffer(), _passphrase())
 
 
 ## A per-installation passphrase: the unique id where there is one, a constant on web (where it would be pointless). Not typed by the player.
 static func _passphrase() -> String:
-	var machine := DotPlatform.unique_id()
+	var machine := GSPlatform.unique_id()
 
-	return DotHash.sha256_text(
+	return GSHash.sha256_text(
 		"dot-auth:local-profiles:%s" % (machine if machine != "" else "web")
 	)
 
@@ -170,6 +170,6 @@ func describe() -> Dictionary:
 	}
 
 
-## The client store a [DotAuthConfig] describes, from [member DotAuthConfig.local_profile_client_path].
-static func for_config(config: DotAuthConfig) -> DotLocalProfileClient:
-	return DotLocalProfileClient.at(config.local_profile_client_path)
+## The client store a [GSAuthConfig] describes, from [member GSAuthConfig.local_profile_client_path].
+static func for_config(config: GSAuthConfig) -> GSLocalProfileClient:
+	return GSLocalProfileClient.at(config.local_profile_client_path)

@@ -1,10 +1,10 @@
 @tool
-class_name DotAuthSessionReporter
+class_name GSAuthSessionReporter
 extends Node
 
-## Tells the issuer who is playing on this server: the server half of [member DotAuthConfig.single_session].
+## Tells the issuer who is playing on this server: the server half of [member GSAuthConfig.single_session].
 ##
-## Every report is the whole roster (absent means gone), from a callable the host supplies, so a lost report costs one interval. [DotAuthServer] builds it when [member DotAuthConfig.session_report_url] is set, authenticated with [member DotAuthConfig.session_report_key] as a bearer token over the proxy's TLS. Goodbye on shutdown and SIGINT limits: docs/rationale.md.
+## Every report is the whole roster (absent means gone), from a callable the host supplies, so a lost report costs one interval. [GSAuthServer] builds it when [member GSAuthConfig.session_report_url] is set, authenticated with [member GSAuthConfig.session_report_key] as a bearer token over the proxy's TLS. Goodbye on shutdown and SIGINT limits: docs/rationale.md.
 
 const CHANNEL := "auth.sessions"
 
@@ -12,14 +12,14 @@ const CHANNEL := "auth.sessions"
 const MAX_REPORTED_PLAYERS := 512
 
 ## Emitted after each report, successful or not.
-signal reported(result: DotResult)
+signal reported(result: GSResult)
 
-@export var config: DotAuthConfig = null
+@export var config: GSAuthConfig = null
 
 ## Report on a timer once [method start] has run.
 @export var auto_report: bool = true
 
-## Supplies the current roster at report time: uid [String]s, [DotAuthIdentity]s, or dictionaries with a [code]uid[/code] key. A callable, so it is what is true when sent.
+## Supplies the current roster at report time: uid [String]s, [GSAuthIdentity]s, or dictionaries with a [code]uid[/code] key. A callable, so it is what is true when sent.
 var roster_provider: Callable = Callable()
 
 ## How long the goodbye in [method report_offline_now] may hold up a process that is
@@ -27,7 +27,7 @@ var roster_provider: Callable = Callable()
 ## the players fall back to its lease.
 @export_range(0.5, 30.0, 0.5) var offline_timeout_sec: float = 3.0
 
-var _http: DotHttp = null
+var _http: GSHttp = null
 var _timer: Timer = null
 var _started: bool = false
 var _report_count: int = 0
@@ -45,38 +45,38 @@ func _ready() -> void:
 
 	var res := start()
 	if not res.ok:
-		DotLog.result(CHANNEL, "session reporting", res)
+		GSLog.result(CHANNEL, "session reporting", res)
 
 
-func start() -> DotResult:
+func start() -> GSResult:
 	if _started:
-		return DotResult.success(self)
+		return GSResult.success(self)
 
 	if config == null:
-		return DotResult.fail(
-			DotError.CODE_STATE, "DotAuthSessionReporter has no config."
+		return GSResult.fail(
+			GSError.CODE_STATE, "GSAuthSessionReporter has no config."
 		)
 
 	if config.session_report_url.strip_edges() == "":
-		return DotResult.fail(
-			DotError.CODE_STATE,
+		return GSResult.fail(
+			GSError.CODE_STATE,
 			"No session_report_url; the issuer will not hear about this roster.",
-			"set DotAuthConfig.session_report_url and session_report_key"
+			"set GSAuthConfig.session_report_url and session_report_key"
 		)
 
 	if config.session_report_key.strip_edges() == "":
-		return DotResult.fail(
-			DotError.CODE_STATE,
+		return GSResult.fail(
+			GSError.CODE_STATE,
 			"No session_report_key; the issuer would refuse every report."
 		)
 
 	if config.server_id.strip_edges() == "":
-		return DotResult.fail(
-			DotError.CODE_STATE,
+		return GSResult.fail(
+			GSError.CODE_STATE,
 			"No server_id; a roster has to say which server it is the roster of."
 		)
 
-	_http = DotHttp.new()
+	_http = GSHttp.new()
 	_http.name = "SessionReportHttp"
 	_http.timeout_sec = 15.0
 	# One retry, not two: the next scheduled report supersedes this one anyway,
@@ -93,7 +93,7 @@ func start() -> DotResult:
 
 	_started = true
 
-	DotLog.info(
+	GSLog.info(
 		CHANNEL,
 		"session reporting ready",
 		{
@@ -103,18 +103,18 @@ func start() -> DotResult:
 		}
 	)
 
-	return DotResult.success(self)
+	return GSResult.success(self)
 
 
 ## Sends the roster now. See [method normalise_roster] for what is accepted.
-func report(roster: Array) -> DotResult:
+func report(roster: Array) -> GSResult:
 	if not _started:
-		return DotResult.fail(DotError.CODE_STATE, "Not started.")
+		return GSResult.fail(GSError.CODE_STATE, "Not started.")
 
 	var uids := normalise_roster(roster)
 
 	if uids.size() > MAX_REPORTED_PLAYERS:
-		DotLog.warn(
+		GSLog.warn(
 			CHANNEL,
 			"roster truncated for the issuer; players past the cap are freed there",
 			{"had": uids.size(), "sent": MAX_REPORTED_PLAYERS}
@@ -134,13 +134,13 @@ func report(roster: Array) -> DotResult:
 		# stop has to say goodbye again.
 		_offline_sent = uids.is_empty()
 		_last_error = ""
-		DotLog.debug(CHANNEL, "roster reported", {"players": uids.size()})
+		GSLog.debug(CHANNEL, "roster reported", {"players": uids.size()})
 	else:
 		_last_error = res.error.message
 		if res.error.http_status == 401:
 			# Will not fix itself. Say what to check rather than logging the
 			# same refusal once a minute for the rest of the server's life.
-			DotLog.warn(
+			GSLog.warn(
 				CHANNEL,
 				"the issuer does not recognise this server's key; check "
 				+ "session_report_key and that the issuer holds it under "
@@ -148,7 +148,7 @@ func report(roster: Array) -> DotResult:
 				{"server": config.server_id}
 			)
 		else:
-			DotLog.warn(
+			GSLog.warn(
 				CHANNEL, "roster report failed", {"why": res.error.message}
 			)
 
@@ -157,23 +157,23 @@ func report(roster: Array) -> DotResult:
 
 
 ## Reports an empty roster and waits for it; call before shutting down. Without it the players are held at the issuer for the lease. An about-to-quit host wants [method report_offline_now].
-func report_offline() -> DotResult:
+func report_offline() -> GSResult:
 	if not _started:
-		return DotResult.success(false)
+		return GSResult.success(false)
 	return await report([])
 
 
 ## Reports an empty roster [i]synchronously[/i], for a process about to end, on the calling thread for at most [member offline_timeout_sec].
 ##
 ## [method report_offline] goes through a node the tree frees first. Sends once. Not on web, where it cannot be waited for.
-func report_offline_now() -> DotResult:
+func report_offline_now() -> GSResult:
 	if not _started:
-		return DotResult.success(false)
+		return GSResult.success(false)
 	if _offline_sent:
-		return DotResult.success(true)
-	if DotPlatform.is_web():
-		return DotResult.fail(
-			DotError.CODE_UNSUPPORTED, "A browser cannot block on a request."
+		return GSResult.success(true)
+	if GSPlatform.is_web():
+		return GSResult.fail(
+			GSError.CODE_UNSUPPORTED, "A browser cannot block on a request."
 		)
 
 	var res := _post_blocking(
@@ -185,12 +185,12 @@ func report_offline_now() -> DotResult:
 		_report_count += 1
 		_last_sent = 0
 		_last_error = ""
-		DotLog.info(CHANNEL, "told the issuer this server is empty", {
+		GSLog.info(CHANNEL, "told the issuer this server is empty", {
 			"server": config.server_id,
 		})
 	else:
 		_last_error = res.error.message
-		DotLog.warn(
+		GSLog.warn(
 			CHANNEL,
 			"could not tell the issuer this server stopped; its players are held "
 			+ "for the lease",
@@ -253,7 +253,7 @@ func _exit_tree() -> void:
 
 
 ## One JSON POST to the issuer's /session, on this thread, bounded by [param timeout].
-func _post_blocking(payload: Dictionary, timeout: float) -> DotResult:
+func _post_blocking(payload: Dictionary, timeout: float) -> GSResult:
 	var target := _split_url(config.session_report_url)
 	var tls: bool = target["tls"]
 	var host: String = target["host"]
@@ -266,19 +266,19 @@ func _post_blocking(payload: Dictionary, timeout: float) -> DotResult:
 		host, port, TLSOptions.client() if tls else null
 	)
 	if err != OK:
-		return DotResult.fail(DotError.CODE_NETWORK, "Could not reach the issuer.", host)
+		return GSResult.fail(GSError.CODE_NETWORK, "Could not reach the issuer.", host)
 
 	var waiting := [HTTPClient.STATUS_RESOLVING, HTTPClient.STATUS_CONNECTING]
 	while client.get_status() in waiting:
 		client.poll()
 		if Time.get_ticks_msec() > deadline:
 			client.close()
-			return DotResult.fail(DotError.CODE_TIMEOUT, "The issuer did not answer.")
+			return GSResult.fail(GSError.CODE_TIMEOUT, "The issuer did not answer.")
 		OS.delay_msec(2)
 
 	if client.get_status() != HTTPClient.STATUS_CONNECTED:
 		client.close()
-		return DotResult.fail(DotError.CODE_NETWORK, "Could not reach the issuer.", host)
+		return GSResult.fail(GSError.CODE_NETWORK, "Could not reach the issuer.", host)
 
 	err = client.request(
 		HTTPClient.METHOD_POST,
@@ -291,18 +291,18 @@ func _post_blocking(payload: Dictionary, timeout: float) -> DotResult:
 	)
 	if err != OK:
 		client.close()
-		return DotResult.fail(DotError.CODE_NETWORK, "The report could not be sent.")
+		return GSResult.fail(GSError.CODE_NETWORK, "The report could not be sent.")
 
 	while client.get_status() == HTTPClient.STATUS_REQUESTING:
 		client.poll()
 		if Time.get_ticks_msec() > deadline:
 			client.close()
-			return DotResult.fail(DotError.CODE_TIMEOUT, "The issuer did not answer.")
+			return GSResult.fail(GSError.CODE_TIMEOUT, "The issuer did not answer.")
 		OS.delay_msec(2)
 
 	if not client.has_response():
 		client.close()
-		return DotResult.fail(DotError.CODE_NETWORK, "The issuer closed the connection.")
+		return GSResult.fail(GSError.CODE_NETWORK, "The issuer closed the connection.")
 
 	var status := client.get_response_code()
 	client.close()
@@ -332,21 +332,21 @@ func _split_url(raw: String) -> Dictionary:
 
 
 ## The result for the issuer's HTTP status.
-func _status_result(status: int) -> DotResult:
+func _status_result(status: int) -> GSResult:
 	if status == 401:
-		var refused := DotError.make(
-			DotError.CODE_AUTH, "The issuer does not recognise this server's key."
+		var refused := GSError.make(
+			GSError.CODE_AUTH, "The issuer does not recognise this server's key."
 		)
 		refused.http_status = status
-		return DotResult.failure(refused)
+		return GSResult.failure(refused)
 	if status < 200 or status >= 300:
-		var failed := DotError.make(
-			DotError.CODE_HTTP, "The issuer answered %d." % status
+		var failed := GSError.make(
+			GSError.CODE_HTTP, "The issuer answered %d." % status
 		)
 		failed.http_status = status
-		return DotResult.failure(failed)
+		return GSResult.failure(failed)
 
-	return DotResult.success(true)
+	return GSResult.success(true)
 
 
 ## The uids in a roster, deduplicated, in order, guests left out (they hold no ticket, so there is nothing to confirm or end).

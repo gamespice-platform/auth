@@ -25,7 +25,7 @@ func _done() -> void:
 	_completed += 1
 
 
-func _check(what: String, passed: bool, res: DotResult) -> void:
+func _check(what: String, passed: bool, res: GSResult) -> void:
 	if passed:
 		_passed += 1
 		_line("  %-32s ok" % what)
@@ -70,7 +70,7 @@ func _test_local_profiles() -> void:
 func _profiles_store_checks(path: String) -> bool:
 	DirAccess.remove_absolute(path)
 
-	var store := DotLocalProfiles.at(path)
+	var store := GSLocalProfiles.at(path)
 	_check("store opens with no file", store.open().ok, null)
 
 	var made := store.create("Ashley")
@@ -86,8 +86,8 @@ func _profiles_store_checks(path: String) -> bool:
 	# file a profile or an avatar through the same stores a backbone one does.
 	_check(
 		"the id is a usable player key",
-		id.length() == DotLocalProfiles.ID_LENGTH
-			and DotAvatarKeyShape.is_usable(id),
+		id.length() == GSLocalProfiles.ID_LENGTH
+			and GSAvatarKeyShape.is_usable(id),
 		null
 	)
 
@@ -98,7 +98,7 @@ func _profiles_store_checks(path: String) -> bool:
 	var wrong := store.verify(id, "not-the-secret")
 	_check(
 		"a wrong secret does not",
-		not wrong.ok and wrong.code() == DotError.CODE_AUTH,
+		not wrong.ok and wrong.code() == GSError.CODE_AUTH,
 		null
 	)
 
@@ -116,7 +116,7 @@ func _profiles_store_checks(path: String) -> bool:
 
 	# The secret is stored hashed. A file that held usable credentials for
 	# everybody who ever played would be the worst thing on the server's disk.
-	var raw := DotPaths.read_text(path)
+	var raw := GSPaths.read_text(path)
 	_check(
 		"the file holds no usable secret",
 		raw.ok and not str(raw.value).contains(secret),
@@ -138,34 +138,34 @@ func _profiles_store_checks(path: String) -> bool:
 func _profiles_persistence_checks(path: String, id: String, secret: String) -> void:
 	# It must survive a restart, or it is a session and not an account.
 	# The CLIENT half's path comes from the config, not the default.
-	var client_config := DotAuthConfig.new()
+	var client_config := GSAuthConfig.new()
 	client_config.local_profile_client_path = path + ".client"
-	var client_store := DotLocalProfileClient.for_config(client_config)
+	var client_store := GSLocalProfileClient.for_config(client_config)
 	_check(
 		"the client profile store honours the configured path",
 		client_store != null and client_store.path == path + ".client",
-		DotResult.success(client_store)
+		GSResult.success(client_store)
 	)
 
-	var reopened := DotLocalProfiles.at(path)
+	var reopened := GSLocalProfiles.at(path)
 	_check("it reopens from disk", reopened.open().ok, null)
 	_check("and the profile is still there", reopened.verify(id, secret).ok, null)
 
-	var capped := DotLocalProfiles.at(path)
+	var capped := GSLocalProfiles.at(path)
 	capped.max_profiles = 1
 	capped.open()
 	var over := capped.create("Somebody Else")
 	_check(
 		"the cap refuses a profile beyond it",
-		not over.ok and over.code() == DotError.CODE_QUOTA,
+		not over.ok and over.code() == GSError.CODE_QUOTA,
 		null
 	)
 
 
 ## The through-the-auth-server half; returns the server, the issued credential and its file.
 func _profiles_server_checks() -> Dictionary:
-	var config := DotAuthConfig.new()
-	config.strategy = DotAuthConfig.Strategy.LOCAL
+	var config := GSAuthConfig.new()
+	config.strategy = GSAuthConfig.Strategy.LOCAL
 	config.local_accounts_path = "user://dot_auth_profile_strategy.json"
 	config.allow_guests = false
 	config.allow_local_profiles = true
@@ -173,7 +173,7 @@ func _profiles_server_checks() -> Dictionary:
 
 	DirAccess.remove_absolute(config.local_profiles_path)
 
-	var server := DotAuthServer.new()
+	var server := GSAuthServer.new()
 	server.name = "LocalProfileAuthServer"
 	server.config = config
 	server.config_file = ""
@@ -202,7 +202,7 @@ func _profiles_server_checks() -> Dictionary:
 	_check("a visitor signs up", signed_up.ok, signed_up)
 
 	if signed_up.ok:
-		var identity: DotAuthIdentity = signed_up.value
+		var identity: GSAuthIdentity = signed_up.value
 		_check(
 			"and is not a guest — the server issued this one",
 			not identity.is_guest,
@@ -222,7 +222,7 @@ func _profiles_server_checks() -> Dictionary:
 		"and is not on the identity, which is broadcast",
 		signed_up.ok
 			and not JSON.stringify(
-				(signed_up.value as DotAuthIdentity).to_dict()
+				(signed_up.value as GSAuthIdentity).to_dict()
 			).contains(str(issued.get("secret", "no-secret-was-issued"))),
 		null
 	)
@@ -232,7 +232,7 @@ func _profiles_server_checks() -> Dictionary:
 
 
 ## A returning join, a forged secret, and credentials naming no provider.
-func _profiles_returning_checks(server: DotAuthServer, issued: Dictionary, signed_up: DotResult) -> void:
+func _profiles_returning_checks(server: GSAuthServer, issued: Dictionary, signed_up: GSResult) -> void:
 	var returning := await server.authenticate(
 		{"local_profile": {"id": issued["id"], "secret": issued["secret"]}},
 		"peer2"
@@ -242,8 +242,8 @@ func _profiles_returning_checks(server: DotAuthServer, issued: Dictionary, signe
 		"as the same player",
 		returning.ok
 			and signed_up.ok
-			and (returning.value as DotAuthIdentity).uid
-				== (signed_up.value as DotAuthIdentity).uid,
+			and (returning.value as GSAuthIdentity).uid
+				== (signed_up.value as GSAuthIdentity).uid,
 		null
 	)
 
@@ -265,7 +265,7 @@ func _profiles_returning_checks(server: DotAuthServer, issued: Dictionary, signe
 func _profiles_client_checks(keeper_path: String, issued: Dictionary) -> void:
 	DirAccess.remove_absolute(keeper_path)
 
-	var keeper := DotLocalProfileClient.at(keeper_path)
+	var keeper := GSLocalProfileClient.at(keeper_path)
 	keeper.open()
 
 	_check(
@@ -291,7 +291,7 @@ func _profiles_client_checks(keeper_path: String, issued: Dictionary) -> void:
 		null
 	)
 
-	var reloaded := DotLocalProfileClient.at(keeper_path)
+	var reloaded := GSLocalProfileClient.at(keeper_path)
 	reloaded.open()
 	_check(
 		"it survives a restart of the client",
@@ -304,9 +304,9 @@ func _profiles_client_checks(keeper_path: String, issued: Dictionary) -> void:
 
 
 ## The shape check GameSpice User Avatar applies to a key, restated for the assertion.
-## GameSpice Auth cannot call `DotAvatarKey.is_usable`; that two addons which never
+## GameSpice Auth cannot call `GSAvatarKey.is_usable`; that two addons which never
 ## import each other agree on a key's shape is what is checked.
-class DotAvatarKeyShape:
+class GSAvatarKeyShape:
 	static func is_usable(key: String) -> bool:
 		if key.length() < 8 or key.length() > 64:
 			return false
@@ -330,7 +330,7 @@ class DotAvatarKeyShape:
 
 ## RSA keypair via GameSpice Core's Crypto wrapper.
 ## Named oddly to avoid colliding with a GameSpice Cloud class; only a local helper.
-func DotCloudKeys_generate() -> Dictionary:
+func GSCloudKeys_generate() -> Dictionary:
 	var crypto := Crypto.new()
 	var key := crypto.generate_rsa(2048)
 	if key == null:

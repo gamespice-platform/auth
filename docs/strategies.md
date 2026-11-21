@@ -2,7 +2,7 @@
 
 ## The four strategies
 
-`DotAuthConfig.strategy` decides how `DotAuthServer.authenticate()` behaves, so one server binary covers every deployment:
+`GSAuthConfig.strategy` decides how `GSAuthServer.authenticate()` behaves, so one server binary covers every deployment:
 
 | Strategy | Use | Cost |
 | --- | --- | --- |
@@ -15,8 +15,8 @@
 
 Anything a client sends a game server reaches its operator, and the account access token works on every `/api/app/v1` route for an hour. So:
 
-- **Server:** with a `backbone`, it announces `join_audience` in the challenge (`DotAuthServer.join_audience()`: `DotAuthConfig.join_audience` if pinned, else the target `integration/v1/me` names) and resolves what arrives through `player/introspect`. The site maps `join_token_required` (an old client sent its access token) and `wrong_audience` to sentences. With no backbone a join token fails in words; `/me` is only the legacy path for old clients. A `ticket` is verified too when `ticket_public_key` is set.
-- **Client** (`DotClientLink._attach_introspect`): it mints a join token (`DotAuthClient.request_join_token`, `POST /api/app/v1/play/join-token`) only when the announced audience is in `DotAuthConfig.first_party_audiences`. Otherwise it sends a connect ticket if the build has an issuer, and if not it fails the join as `forbidden`. It never sends `valid_access_token()`.
+- **Server:** with a `backbone`, it announces `join_audience` in the challenge (`GSAuthServer.join_audience()`: `GSAuthConfig.join_audience` if pinned, else the target `integration/v1/me` names) and resolves what arrives through `player/introspect`. The site maps `join_token_required` (an old client sent its access token) and `wrong_audience` to sentences. With no backbone a join token fails in words; `/me` is only the legacy path for old clients. A `ticket` is verified too when `ticket_public_key` is set.
+- **Client** (`GSClientLink._attach_introspect`): it mints a join token (`GSAuthClient.request_join_token`, `POST /api/app/v1/play/join-token`) only when the announced audience is in `GSAuthConfig.first_party_audiences`. Otherwise it sends a connect ticket if the build has an issuer, and if not it fails the join as `forbidden`. It never sends `valid_access_token()`.
 - A join token is `tmc_jt_`-prefixed, lives 60 s, is spent once, and only the credential its audience names can spend it. A server that lies about its audience gains nothing, so the first-party list is defence in depth, not the only guard.
 - **Compatibility:** the site refuses DEVICE tokens at introspect, so a client older than API level 5 cannot join an INTROSPECT server (`Your game needs an update`). A new client on a server that does not announce `join_audience` (older GameSpice Server or GameSpice Auth, or no backbone) falls back to a ticket or a refusal. Web builds' GAME tokens are still accepted at their own app's servers.
 
@@ -24,7 +24,7 @@ Anything a client sends a game server reaches its operator, and the account acce
 
 ## Local profiles: accounts with no cloud
 
-`allow_local_profiles` is deliberately **not** a strategy. It is a `DotAuthProvider`, so it composes: a server can take backbone tickets *and* let a visitor with no site account make one that lives here.
+`allow_local_profiles` is deliberately **not** a strategy. It is a `GSAuthProvider`, so it composes: a server can take backbone tickets *and* let a visitor with no site account make one that lives here.
 
 **Different from `LOCAL`.** That strategy is an operator-maintained file of usernames and passwords, for a server with a known cast. This is self-service: a visitor names themselves and is the same player next week.
 
@@ -32,7 +32,7 @@ Anything a client sends a game server reaches its operator, and the account acce
 
 On first join the server mints an id and a 32-byte secret, stores only a salted hash, and hands the secret to the client once; the client keeps it **per server** and presents it next time. A session cookie, essentially.
 
-Every alternative was worse, and each is written down in `DotLocalProfiles` because each is the one somebody will propose again:
+Every alternative was worse, and each is written down in `GSLocalProfiles` because each is the one somebody will propose again:
 
 - **A name.** An offline mode that hashes the name into the uuid means anyone who types your name is you.
 - **A machine id.** `device_hint()` exists and is *not* the identity. `OS.get_unique_id()` returns **nothing at all on web and iOS**, and a browser is a first-class target. It is also just a string the client sends, so it is exactly as forgeable as a name while looking authoritative, and it is stable across *accounts* as well as installs, so two people sharing a machine are one player. It is stored on creation and compared on verify **only to log** that a profile moved machine; enforcing it would lock players out for replacing a computer.
@@ -46,13 +46,13 @@ Every alternative was worse, and each is written down in `DotLocalProfiles` beca
 
 ### The id is a player key, unchanged
 
-22 base64url characters: the shape `DotUserScope` derives and `DotAvatarKey.is_usable` accepts. So a local profile files a profile and an avatar through exactly the same store interfaces a backbone-backed player does, and **nothing downstream branches on which kind of account it is**: point GameSpice User and GameSpice User Avatar at their `local` backends and the whole platform works with no backbone at all.
+22 base64url characters: the shape `GSUserScope` derives and `GSAvatarKey.is_usable` accepts. So a local profile files a profile and an avatar through exactly the same store interfaces a backbone-backed player does, and **nothing downstream branches on which kind of account it is**: point GameSpice User and GameSpice User Avatar at their `local` backends and the whole platform works with no backbone at all.
 
-The demo restates the key-shape check as `DotAvatarKeyShape` rather than calling GameSpice User Avatar's, because that agreement between two addons that never import each other is the thing being tested.
+The demo restates the key-shape check as `GSAvatarKeyShape` rather than calling GameSpice User Avatar's, because that agreement between two addons that never import each other is the thing being tested.
 
 ## Adding an authentication method
 
-The four strategies do not cover a store or console platform, a chat service, a publisher's own account service, a LAN token or a QA bypass, and a game needing one should not fork this. Subclass `DotAuthProvider` and register it:
+The four strategies do not cover a store or console platform, a chat service, a publisher's own account service, a LAN token or a QA bypass, and a game needing one should not fork this. Subclass `GSAuthProvider` and register it:
 
 ```gdscript
 auth_server.add_provider(PlatformProvider.new())
@@ -62,13 +62,13 @@ Providers are consulted **before** the configured strategy, in priority order. T
 
 - **`_handles()` must be cheap and structural** ("does this dictionary contain my field"). A provider doing network work there runs it for logins meant for somebody else.
 - **A provider that claims a credential owns the outcome.** If it authenticates and then refuses, the built-in strategy does *not* get a second go; otherwise a refused login walks in through another door.
-- **Namespace your uids.** `uid` is what bans and admin entries key on. Two platforms' account ids are both digits; unprefixed, a ban on one applies to whoever holds the other. `DotAuthProvider.authenticate` warns when a uid has no `:` in it.
+- **Namespace your uids.** `uid` is what bans and admin entries key on. Two platforms' account ids are both digits; unprefixed, a ban on one applies to whoever holds the other. `GSAuthProvider.authenticate` warns when a uid has no `:` in it.
 
 Rate limiting runs before providers, so a custom provider cannot be used to make this server hammer an external service.
 
 ## Coupling with GameSpice Server
 
-GameSpice Auth and GameSpice Server do not import each other; either works alone. `DotAuthServer` registers itself in `DotRegistry` as `dot_auth_server`, and `DotAuthAdminSource` satisfies GameSpice Server's admin-source contract (`lookup(identity) -> DotResult{flags, immunity, source}` plus `source_name()`) by duck typing. The other direction is duck-typed too: `DotAuthServer` finds `dot_server` in `DotRegistry` for its session reporter and reads only `sessions()`, `uid()`, `is_authenticated()`, `state_changed` and `state_name()` ([tickets](tickets.md#who-builds-the-reporter-and-which-stops-it-reports)). GameSpice Server is linked into this project only for that suite. Keep it that way: a hard dependency in either direction makes both harder to adopt.
+GameSpice Auth and GameSpice Server do not import each other; either works alone. `GSAuthServer` registers itself in `GSRegistry` as `dot_auth_server`, and `GSAuthAdminSource` satisfies GameSpice Server's admin-source contract (`lookup(identity) -> GSResult{flags, immunity, source}` plus `source_name()`) by duck typing. The other direction is duck-typed too: `GSAuthServer` finds `dot_server` in `GSRegistry` for its session reporter and reads only `sessions()`, `uid()`, `is_authenticated()`, `state_changed` and `state_name()` ([tickets](tickets.md#who-builds-the-reporter-and-which-stops-it-reports)). GameSpice Server is linked into this project only for that suite. Keep it that way: a hard dependency in either direction makes both harder to adopt.
 
 ## Deliberately not here
 

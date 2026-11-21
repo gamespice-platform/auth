@@ -1,5 +1,5 @@
 @tool
-class_name DotAuthAdminSource
+class_name GSAuthAdminSource
 extends Resource
 
 ## Turns backbone identity into GameSpice Server admin permissions.
@@ -22,7 +22,7 @@ const CHANNEL := "auth.admin"
 ## Flags granted to every authenticated (non-guest) player, for servers where being signed in is a privilege.
 @export var authenticated_flags: PackedStringArray = PackedStringArray()
 
-## Explicit per-user grants, as [code]uid -> [flags][/code]; keyed on [member DotAuthIdentity.uid], never on a display name.
+## Explicit per-user grants, as [code]uid -> [flags][/code]; keyed on [member GSAuthIdentity.uid], never on a display name.
 @export var user_flags: Dictionary = {}
 
 ## Immunity by group, as [code]group -> level[/code]; higher immunity cannot be kicked, banned or muted by lower.
@@ -35,17 +35,17 @@ const CHANNEL := "auth.admin"
 ## Resolves an identity to admin permissions, the method GameSpice Server calls.
 ##
 ## Returns [code]{flags, immunity, source}[/code], or a failure when this source has nothing to say, which GameSpice Server reads as "no permissions from here", not an error.
-func lookup(identity: DotAuthIdentity) -> DotResult:
+func lookup(identity: GSAuthIdentity) -> GSResult:
 	if identity == null or not identity.is_valid():
-		return DotResult.fail(
-			DotError.CODE_INVALID, "No identity to look up."
+		return GSResult.fail(
+			GSError.CODE_INVALID, "No identity to look up."
 		)
 
 	# Guests get nothing, ever. A guest identity is a random per-device string, so
 	# granting it permissions would mean granting them to anyone who asks.
 	if identity.is_guest:
-		return DotResult.fail(
-			DotError.CODE_FORBIDDEN,
+		return GSResult.fail(
+			GSError.CODE_FORBIDDEN,
 			"Guests have no permissions.",
 			identity.uid
 		)
@@ -86,8 +86,8 @@ func lookup(identity: DotAuthIdentity) -> DotResult:
 		reasons.append("user")
 
 	if flags.is_empty():
-		return DotResult.fail(
-			DotError.CODE_FORBIDDEN,
+		return GSResult.fail(
+			GSError.CODE_FORBIDDEN,
 			"No permissions for this player.",
 			identity.uid
 		)
@@ -95,7 +95,7 @@ func lookup(identity: DotAuthIdentity) -> DotResult:
 	var out := PackedStringArray(flags.keys())
 	out.sort()
 
-	DotLog.debug(
+	GSLog.debug(
 		CHANNEL,
 		"granted permissions",
 		{
@@ -106,7 +106,7 @@ func lookup(identity: DotAuthIdentity) -> DotResult:
 		}
 	)
 
-	return DotResult.success({
+	return GSResult.success({
 		"flags": out,
 		"immunity": immunity,
 		"source": "dot-auth (%s)" % ", ".join(reasons),
@@ -144,15 +144,15 @@ func _as_flags(value: Variant) -> PackedStringArray:
 
 ## Loads the mapping from a JSON file, for operators who would rather not edit a
 ## [Resource] in the inspector.
-func load_from_json(path: String) -> DotResult:
-	var read := DotPaths.read_json(path)
+func load_from_json(path: String) -> GSResult:
+	var read := GSPaths.read_json(path)
 	if not read.ok:
 		return read
 
 	var data: Variant = read.value
 	if not (data is Dictionary):
-		return DotResult.fail(
-			DotError.CODE_PARSE, "The admin mapping must be a JSON object."
+		return GSResult.fail(
+			GSError.CODE_PARSE, "The admin mapping must be a JSON object."
 		)
 
 	var d := data as Dictionary
@@ -172,7 +172,7 @@ func load_from_json(path: String) -> DotResult:
 	if d.get("authenticated") is Array:
 		authenticated_flags = _as_flags(d["authenticated"])
 
-	DotLog.info(
+	GSLog.info(
 		CHANNEL,
 		"admin mapping loaded",
 		{
@@ -182,7 +182,7 @@ func load_from_json(path: String) -> DotResult:
 		}
 	)
 
-	return DotResult.success(true)
+	return GSResult.success(true)
 
 
 func describe() -> Dictionary:

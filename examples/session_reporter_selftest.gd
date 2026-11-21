@@ -2,7 +2,7 @@ extends Node
 
 ## A dedicated server that stops frees its players' seats on its own report, not the lease.
 ##
-## Real [DotServer]s (linked from GameSpice Server) with a [DotAuthServer] child and a real [DotAuthIssuer] on a 300-second lease, so a seat freed seconds after confirming can only have been freed by a report. The issuer's socket is a fake on a thread: the goodbye is synchronous and would block the main thread the real listener polls on. Armed by: [member DotAuthServer.create_session_reporter] defaulting false, or removing [code]follow_server[/code]. Run: timeout 120 examples/session_reporter_selftest.tscn.
+## Real [GSServer]s (linked from GameSpice Server) with a [GSAuthServer] child and a real [GSAuthIssuer] on a 300-second lease, so a seat freed seconds after confirming can only have been freed by a report. The issuer's socket is a fake on a thread: the goodbye is synchronous and would block the main thread the real listener polls on. Armed by: [member GSAuthServer.create_session_reporter] defaulting false, or removing [code]follow_server[/code]. Run: timeout 120 examples/session_reporter_selftest.tscn.
 
 const SERVER_A := "eu-west-1"
 const SERVER_B := "us-east-2"
@@ -20,8 +20,8 @@ var _completed := 0
 var _passed := 0
 var _failed := 0
 
-var _issuer: DotAuthIssuer = null
-var _ada: DotAuthIdentity = null
+var _issuer: GSAuthIssuer = null
+var _ada: GSAuthIdentity = null
 
 # The fake issuer socket. Everything the thread touches is behind the mutex.
 var _fake: TCPServer = null
@@ -32,7 +32,7 @@ var _fake_received: Array = []
 
 
 func _ready() -> void:
-	DotLog.set_level(DotLog.Level.ERROR)
+	GSLog.set_level(GSLog.Level.ERROR)
 	await _run()
 
 
@@ -48,7 +48,7 @@ func _run() -> void:
 	_fake_thread.start(_fake_loop)
 
 	var key := Crypto.new().generate_rsa(2048)
-	var issuer_config := DotAuthConfig.new()
+	var issuer_config := GSAuthConfig.new()
 	issuer_config.issuer_private_key = key.save_to_string(false)
 	issuer_config.issuer_name = "dot-auth-test"
 	issuer_config.backbone_url = "http://127.0.0.1:1"
@@ -56,7 +56,7 @@ func _run() -> void:
 	issuer_config.session_lease_sec = 300
 	issuer_config.single_session = true
 
-	_issuer = DotAuthIssuer.new()
+	_issuer = GSAuthIssuer.new()
 	_issuer.name = "Issuer"
 	_issuer.config = issuer_config
 	_issuer.config_file = ""
@@ -64,7 +64,7 @@ func _run() -> void:
 	add_child(_issuer)
 	var _keyed := _issuer.add_server_key(SERVER_A, KEY_A)
 
-	_ada = DotAuthIdentity.new()
+	_ada = GSAuthIdentity.new()
 	_ada.uid = "backbone:ada"
 	_ada.provider = "backbone"
 	_ada.provider_id = "ada"
@@ -126,11 +126,11 @@ func _test_shutdown_reports() -> void:
 	_check("which follows the registered dot_server", bool(reporter.describe()["following_server"]))
 
 	await _adopt(server, 601, _ada)
-	await _adopt(server, 602, DotAuthIdentity.guest("device-1", "Visitor"))
+	await _adopt(server, 602, GSAuthIdentity.guest("device-1", "Visitor"))
 
 	_check(
 		"the roster is the signed-on uids, guests left out",
-		DotAuthSessionReporter.normalise_roster(reporter.roster_provider.call())
+		GSAuthSessionReporter.normalise_roster(reporter.roster_provider.call())
 			== PackedStringArray([_ada.uid])
 	)
 
@@ -168,14 +168,14 @@ func _test_shutdown_reports() -> void:
 
 
 ## What `quit` (the console's, a scheduled restart's, the host's) does: every node leaves
-## the tree, children first, so the reporter goes before DotServer's own `_exit_tree`
+## the tree, children first, so the reporter goes before GSServer's own `_exit_tree`
 ## shutdown.
 func _test_leaving_the_tree_reports() -> void:
 	_section("leaving the tree (quit): the seat frees on the report")
 
 	# Built before the server boots, so the reporter has to find the server when it
 	# registers rather than at start.
-	var server := DotServer.new()
+	var server := GSServer.new()
 	server.name = "ServerQuit"
 	server.config = _server_config(SERVER_PORTS[2])
 	server.config_file = ""
@@ -220,7 +220,7 @@ func _test_unreachable_issuer() -> void:
 	_section("an issuer that is not there costs a stop at most the timeout")
 
 	var config := _auth_config("http://127.0.0.1:1")
-	var reporter := DotAuthSessionReporter.new()
+	var reporter := GSAuthSessionReporter.new()
 	reporter.config = config
 	reporter.auto_report = false
 	reporter.offline_timeout_sec = 1.0
@@ -246,7 +246,7 @@ func _test_unreachable_issuer() -> void:
 	if silent.listen(SILENT_PORT, "127.0.0.1") != OK:
 		print("  port %d is in use; the silent-issuer half was not run" % SILENT_PORT)
 		return _done()
-	var hung := DotAuthSessionReporter.new()
+	var hung := GSAuthSessionReporter.new()
 	hung.config = _auth_config("http://127.0.0.1:%d" % SILENT_PORT)
 	hung.auto_report = false
 	hung.offline_timeout_sec = 1.0
@@ -291,8 +291,8 @@ func _test_control_without_the_reporter() -> void:
 
 
 
-func _server_config(port: int) -> DotServerConfig:
-	var config := DotServerConfig.new()
+func _server_config(port: int) -> GSServerConfig:
+	var config := GSServerConfig.new()
 	config.hostname = "dot-auth reporter selftest"
 	config.port = port
 	config.max_players = 4
@@ -306,8 +306,8 @@ func _server_config(port: int) -> DotServerConfig:
 	return config
 
 
-func _boot_server(port: int) -> DotServer:
-	var server := DotServer.new()
+func _boot_server(port: int) -> GSServer:
+	var server := GSServer.new()
 	server.name = "Server%d" % port
 	server.config = _server_config(port)
 	server.config_file = ""
@@ -319,25 +319,25 @@ func _boot_server(port: int) -> DotServer:
 	return server
 
 
-func _auth_config(url: String) -> DotAuthConfig:
-	var config := DotAuthConfig.new()
-	config.strategy = DotAuthConfig.Strategy.ANONYMOUS
+func _auth_config(url: String) -> GSAuthConfig:
+	var config := GSAuthConfig.new()
+	config.strategy = GSAuthConfig.Strategy.ANONYMOUS
 	config.server_id = SERVER_A
 	config.session_report_url = url
 	config.session_report_key = KEY_A if url != "" else ""
 	return config
 
 
-func _auth_server(url: String) -> DotAuthServer:
-	var auth := DotAuthServer.new()
+func _auth_server(url: String) -> GSAuthServer:
+	var auth := GSAuthServer.new()
 	auth.name = "Auth"
 	auth.config = _auth_config(url)
 	auth.config_file = ""
 	return auth
 
 
-func _adopt(server: DotServer, peer: int, identity: DotAuthIdentity) -> void:
-	var session := DotClientSession.new()
+func _adopt(server: GSServer, peer: int, identity: GSAuthIdentity) -> void:
+	var session := GSClientSession.new()
 	session.peer_id = peer
 	session.identity = identity
 	session.display_name = identity.display_name
@@ -345,8 +345,8 @@ func _adopt(server: DotServer, peer: int, identity: DotAuthIdentity) -> void:
 	await get_tree().process_frame
 
 
-func _free_server(server: DotServer) -> void:
-	if server.state == DotServer.State.RUNNING or server.state == DotServer.State.HIBERNATING:
+func _free_server(server: GSServer) -> void:
+	if server.state == GSServer.State.RUNNING or server.state == GSServer.State.HIBERNATING:
 		server.shutdown("test over")
 	if server.get_parent() == self:
 		remove_child(server)

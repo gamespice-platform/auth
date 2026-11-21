@@ -1,9 +1,9 @@
-class_name DotAuthWebHandoff
+class_name GSAuthWebHandoff
 extends RefCounted
 
 ## The browser player's identity handoff: the site hands the game a single-use code, never a token.
 ##
-## NOTHING HERE MAY USE `DotWeb.eval`: under a `script-src 'self' 'wasm-unsafe-eval'` policy it fails silently and signs nobody in. Off-web every function answers "nothing to do"; games call [DotAuthClient.try_web_handoff]. Why: docs/rationale.md.
+## NOTHING HERE MAY USE `GSWeb.eval`: under a `script-src 'self' 'wasm-unsafe-eval'` policy it fails silently and signs nobody in. Off-web every function answers "nothing to do"; games call [GSAuthClient.try_web_handoff]. Why: docs/rationale.md.
 
 # No log channel: static reads of one page global. Whether a missing or pending block
 # matters is the auth client's decision, and it is the one that logs how a player
@@ -15,7 +15,7 @@ const GLOBAL := "__TMC_AUTH__"
 
 ## Whether this build could have a handoff at all; false on every native build.
 static func supported() -> bool:
-	return DotWeb.available()
+	return GSWeb.available()
 
 
 ## The `auth` block the site published, or an empty Dictionary (native build, nothing sent, or a game not using TMC identity; none is an error).
@@ -25,7 +25,7 @@ static func read() -> Dictionary:
 	if not supported():
 		return {}
 
-	var obj: Variant = DotWeb.get_global(GLOBAL)
+	var obj: Variant = GSWeb.get_global(GLOBAL)
 
 	if obj == null:
 		return {}
@@ -106,7 +106,7 @@ static func consume() -> void:
 	if not supported():
 		return
 
-	var obj: Variant = DotWeb.get_global(GLOBAL)
+	var obj: Variant = GSWeb.get_global(GLOBAL)
 
 	if obj == null:
 		return
