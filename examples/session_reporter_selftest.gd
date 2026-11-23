@@ -123,7 +123,7 @@ func _test_shutdown_reports() -> void:
 	if reporter == null:
 		_free_server(server)
 		return _done()
-	_check("which follows the registered dot_server", bool(reporter.describe()["following_server"]))
+	_check("which follows the registered gs_server", bool(reporter.describe()["following_server"]))
 
 	await _adopt(server, 601, _ada)
 	await _adopt(server, 602, GSAuthIdentity.guest("device-1", "Visitor"))

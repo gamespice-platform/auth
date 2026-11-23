@@ -12,7 +12,7 @@ var _failed := 0
 
 ## The loopback stubs answer from the main thread, so the client's reads must not wait on it.
 func _init() -> void:
-	ProjectSettings.set_setting("dot/http/use_threads", true)
+	ProjectSettings.set_setting("gs/http/use_threads", true)
 
 
 func _section(title: String) -> void:
