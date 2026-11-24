@@ -35,7 +35,15 @@ signal reported(kind: String, result: GSResult)
 ## the retry, and the 500 was never logged.
 @export_range(0, 10, 1, "or_greater") var max_retries: int = 2
 
+## First pause, seconds, after a call that failed for a reason that is the backbone's (transport, 5xx, 429) once its retries are spent. Doubles per further failed call up to [member backoff_max_sec]; 0 turns the back-off off. During a pause every call fails at once without touching the network, so a wedged backbone is not hit by every report, loadout and ticket call of every server, and the log carries one line for the outage rather than one per report.
+@export var backoff_base_sec: float = 10.0
+
+## Longest pause; 0 means no ceiling.
+@export var backoff_max_sec: float = 300.0
+
 var _http: GSHttp = null
+var _fail_streak: int = 0
+var _resume_at_msec: int = 0
 var _timer: Timer = null
 var _limiter: GSRateLimiter = null
 var _started: bool = false
@@ -303,6 +311,51 @@ func _signed_post(url: String, body: Dictionary) -> GSResult:
 ## ([code]first_http[/code], [code]first_error[/code], [code]attempts[/code]): the first is
 ## usually the real fault, and a later one is often only its echo.
 func _signed(send: Callable, what: String) -> GSResult:
+	var wait := backoff_remaining_sec()
+	if wait > 0.0:
+		var held := GSError.make(
+			GSError.CODE_STATE, "The backbone is failing; not asking again for %.0fs." % wait
+		)
+		held.retry_after = wait
+		held.context["backoff"] = true
+		return GSResult.failure(held)
+
+	var res := await _signed_attempts(send, what)
+	_track_health(res)
+	return res
+
+
+## Seconds left of the pause after failed calls; 0 when calls go out.
+func backoff_remaining_sec() -> float:
+	return maxf(0.0, float(_resume_at_msec - Time.get_ticks_msec()) / 1000.0)
+
+
+## True for the result [method _signed] hands back instead of calling during a pause.
+static func is_backoff(res: GSResult) -> bool:
+	return res != null and res.error != null and res.error.context.get("backoff", false)
+
+
+func _track_health(res: GSResult) -> void:
+	if res.ok:
+		if _fail_streak > 0:
+			GSLog.info(CHANNEL, "the backbone answers again", {"after_failures": _fail_streak})
+		_fail_streak = 0
+		_resume_at_msec = 0
+		return
+	if not _worth_retry(res) or backoff_base_sec <= 0.0:
+		return
+	_fail_streak += 1
+	var pause := backoff_base_sec * pow(2.0, minf(float(_fail_streak - 1), 20.0))
+	if backoff_max_sec > 0.0:
+		pause = minf(pause, backoff_max_sec)
+	_resume_at_msec = Time.get_ticks_msec() + int(pause * 1000.0)
+	if _fail_streak == 1:
+		GSLog.warn(CHANNEL, "the backbone is failing; backing off and logging once", {
+			"why": res.error.message, "pause": "%.0fs" % pause,
+		})
+
+
+func _signed_attempts(send: Callable, what: String) -> GSResult:
 	var first: GSResult = null
 	var res: GSResult = null
 	var attempt := 0
@@ -383,6 +436,8 @@ func _on_report_due() -> void:
 
 
 func _note(res: GSResult, kind: String) -> void:
+	if is_backoff(res):
+		return
 	if res.ok:
 		_report_count += 1
 		_last_error = ""
@@ -402,6 +457,9 @@ func _note(res: GSResult, kind: String) -> void:
 				"need": SCOPE_STATS if kind == "stats" else SCOPE_USERS,
 			}
 		)
+	elif _fail_streak > 1:
+		# The outage was announced when it began; each report is only a count.
+		GSLog.debug(CHANNEL, "report failed", {"kind": kind, "why": res.error.message})
 	else:
 		GSLog.warn(
 			CHANNEL,

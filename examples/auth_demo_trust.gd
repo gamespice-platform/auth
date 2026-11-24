@@ -102,9 +102,42 @@ func _test_backbone_nonce_retry() -> void:
 	res = await client.post_integration("achievements/define", {})
 	_check("max_retries bounds the attempts", not res.ok and stub.seen.size() == 3, res)
 
+	await _backoff_checks(client, stub)
+
 	client.queue_free()
 	await get_tree().process_frame
 	_done()
+
+
+## A failed call (retries spent) pauses calls; a pause answers without the network.
+func _backoff_checks(client: GSBackboneClient, stub: NonceStub) -> void:
+	client._resume_at_msec = 0
+	client._fail_streak = 0
+	client.backoff_base_sec = 30.0
+	client.max_retries = 0
+	stub.seen.clear()
+	stub.statuses = [500]
+	var res: GSResult = await client.post_integration("report/stats", {})
+	_check("a 500 starts a pause", not res.ok and client.backoff_remaining_sec() > 20.0, res)
+	stub.statuses = [200]
+	res = await client.post_integration("report/stats", {})
+	_check(
+		"a call during the pause fails at once, off the network",
+		not res.ok and GSBackboneClient.is_backoff(res) and stub.seen.size() == 1, res
+	)
+	client._resume_at_msec = Time.get_ticks_msec() - 1
+	res = await client.post_integration("report/stats", {})
+	_check("after the pause the call goes out and clears the streak",
+		res.ok and client._fail_streak == 0 and client.backoff_remaining_sec() == 0.0, res)
+	stub.statuses = [400]
+	await client.post_integration("report/stats", {})
+	_check("a 400 does not pause", client.backoff_remaining_sec() == 0.0, GSResult.success(null))
+	stub.statuses = [500, 500]
+	await client.post_integration("report/stats", {})
+	client._resume_at_msec = 0
+	await client.post_integration("report/stats", {})
+	_check("pauses double up to the ceiling", client._fail_streak == 2
+		and client.backoff_remaining_sec() > 40.0, GSResult.success(null))
 
 
 ## Answers post_json from a script of statuses and records each attempt's nonces.
