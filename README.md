@@ -2,6 +2,8 @@
 
 Sign-in for Godot 4.7+ games and dedicated servers. A player signs in against a web back end, and a game server learns who they are without ever being handed a credential for their account. Part of the [GameSpice](https://github.com/gamespice-platform) family, alongside [GameSpice Core](https://github.com/gamespice-platform/core), [GameSpice Server](https://github.com/gamespice-platform/server) and [GameSpice Cloud](https://github.com/gamespice-platform/cloud).
 
+A GameSpice addon, MIT licensed and built with Claude Code. Its headless tests are `auth_demo`, `cfg_selftest` and `session_reporter_selftest` under `examples/`. Sign-in is used in practice: the games in [Zee's Games](https://zeesgames.com) are built on the GameSpice addons and run on live servers.
+
 ## Install
 
 1. Copy `addons/gs_core/` and `addons/gs_auth/` into your project.
@@ -123,9 +125,26 @@ The demo is an offline self-test. It exits non-zero on any failure. Run a ticket
 
 `GSAuthServer.hash_password` is salted SHA-256, not argon2, because Godot has no password KDF. It only keeps a LAN server from storing plaintext. Real accounts belong on the back end. On web, token-store encryption is obfuscation, because the key and the ciphertext share an origin. See [docs/security.md](docs/security.md#two-things-that-are-weaker-than-they-look).
 
-## Status
+## Used by
 
-Built and maintained with Claude Code. The test suites pass, but little of this has been in front of real players yet. Please report rough edges by opening an issue.
+Every game in the collection vendors it:
+
+- [Fatal Contact](https://zeesgames.com/fatal-contact)
+- [Airdrift](https://zeesgames.com/airdrift)
+- [Playlot](https://zeesgames.com/playlot)
+- [Hungario](https://zeesgames.com/hungario)
+- [Buses From Hell](https://zeesgames.com/buses-from-hell)
+- [Smash Copter](https://zeesgames.com/smash-copter)
+- [Zombie Zone](https://zeesgames.com/zombie-zone)
+- [Hide n Seek](https://zeesgames.com/hide-n-seek)
+- [Prop Hunt](https://zeesgames.com/prop-hunt)
+- [Murder Mystery](https://zeesgames.com/murder-mystery)
+- [Deathrun](https://zeesgames.com/deathrun)
+- [Wipeout](https://zeesgames.com/wipeout)
+- [Dangerous Delivery](https://zeesgames.com/dangerous-delivery)
+- [Look At Me](https://zeesgames.com/look-at-me)
+
+The whole collection is at [zeesgames.com](https://zeesgames.com).
 
 ## Licence
 
